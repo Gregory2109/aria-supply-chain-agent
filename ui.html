@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARIA — Agentic Risk & Intelligence Assistant</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg:#0a0a0a;
+--bg2:#111111;
+--bg3:#1a1a1a;
+--bg4:#222222;
+--border:#2a2a2a;
+--border2:#333333;
+--text:#e8e8e8;
+--text2:#999999;
+--text3:#555555;
+--accent:#3b82f6;
+--accent2:#1d4ed8;
+--green:#22c55e;
+--amber:#f59e0b;
+--red:#ef4444;
+--font: -apple-system, BlinkMacSystemFont, 'SF Mono', 'Fira Code', monospace;
+--sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;height:48px;
+  background:var(--bg2);
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.topbar-left{display:flex;align-items:center;gap:16px}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-mark{
+  width:24px;height:24px;border-radius:6px;
+  background:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#fff;font-family:var(--font);
+  letter-spacing:-0.5px;
+}
+.logo-name{font-size:13px;font-weight:600;color:var(--text);letter-spacing:0.02em}
+.logo-sub{font-size:11px;color:var(--text3);font-family:var(--font)}
+.divider-v{width:1px;height:20px;background:var(--border2)}
+.status-pill{
+  display:flex;align-items:center;gap:6px;
+  padding:3px 10px;border-radius:20px;
+  background:rgba(34,197,94,0.08);
+  border:1px solid rgba(34,197,94,0.2);
+  font-size:11px;color:var(--green);font-family:var(--font);
+}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.badge{
+  padding:3px 8px;border-radius:4px;
+  font-size:10px;font-family:var(--font);
+  background:var(--bg3);border:1px solid var(--border2);
+  color:var(--text2);
+}
+.badge.blue{background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.3);color:#60a5fa}
+
+.sidebar{
+  width:220px;flex-shrink:0;
+  background:var(--bg2);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  padding:16px 0;
+}
+.sidebar-section{padding:0 12px;margin-bottom:20px}
+.sidebar-label{font-size:10px;font-family:var(--font);color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;padding:0 8px;margin-bottom:8px}
+.nav-item{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 8px;border-radius:6px;
+  font-size:12px;color:var(--text2);cursor:pointer;
+  transition:all 0.1s;margin-bottom:2px;
+}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.2)}
+.nav-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.nav-dot.green{background:var(--green)}
+.nav-dot.amber{background:var(--amber)}
+.nav-dot.red{background:var(--red)}
+.nav-dot.blue{background:var(--accent)}
+.sidebar-stat{
+  margin:0 12px;padding:10px 12px;
+  background:var(--bg3);border-radius:8px;
+  border:1px solid var(--border);
+}
+.stat-label{font-size:10px;color:var(--text3);font-family:var(--font);margin-bottom:4px}
+.stat-val{font-size:18px;font-weight:600;color:var(--text);font-family:var(--font)}
+.stat-sub{font-size:10px;color:var(--text3);margin-top:2px}
+
+.main{flex:1;display:flex;overflow:hidden}
+.chat-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+.chat-header{
+  padding:12px 20px;
+  border-bottom:1px solid var(--border);
+  background:var(--bg2);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.chat-title{font-size:13px;font-weight:500;color:var(--text)}
+.chat-meta{font-size:11px;color:var(--text3);font-family:var(--font)}
+.model-tag{
+  padding:2px 8px;border-radius:4px;
+  font-size:10px;font-family:var(--font);
+  background:rgba(59,130,246,0.1);
+  border:1px solid rgba(59,130,246,0.25);
+  color:#60a5fa;
+}
+
+.messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth}
+.messages::-webkit-scrollbar{width:4px}
+.messages::-webkit-scrollbar-track{background:transparent}
+.messages::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+.msg-row{display:flex;gap:10px;max-width:100%}
+.msg-row.user{flex-direction:row-reverse}
+.avatar{
+  width:28px;height:28px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:700;flex-shrink:0;font-family:var(--font);
+}
+.avatar.aria{background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa}
+.avatar.user{background:var(--bg3);border:1px solid var(--border2);color:var(--text2)}
+
+.msg-content{max-width:78%;display:flex;flex-direction:column;gap:4px}
+.msg-header{display:flex;align-items:center;gap:8px}
+.msg-name{font-size:11px;font-weight:600;color:var(--text2);font-family:var(--font)}
+.msg-meta{font-size:10px;color:var(--text3);font-family:var(--font)}
+.source-tag{
+  font-size:10px;font-family:var(--font);
+  padding:1px 6px;border-radius:3px;
+  display:inline-flex;align-items:center;gap:4px;
+}
+.source-tag.llm{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#fbbf24}
+.source-tag.cache{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);color:#4ade80}
+.source-tag.multi{background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa}
+
+.bubble{
+  padding:10px 14px;border-radius:8px;
+  font-size:13px;line-height:1.65;
+  border:1px solid var(--border);
+}
+.bubble.aria{background:var(--bg2);border-color:var(--border)}
+.bubble.user{background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.25);color:var(--text)}
+
+.agent-trace{
+  margin-top:6px;padding:8px 10px;
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:6px;font-family:var(--font);font-size:10px;
+  color:var(--text3);line-height:1.8;
+}
+.trace-line{display:flex;align-items:center;gap:6px}
+.trace-line.active{color:var(--green)}
+.trace-line.skip{color:var(--text3);opacity:0.5}
+
+.typing-indicator{display:flex;gap:4px;padding:4px 0;align-items:center}
+.typing-indicator span{
+  width:4px;height:4px;border-radius:50%;
+  background:var(--text3);
+  animation:bounce 1.2s infinite;
+}
+.typing-indicator span:nth-child(2){animation-delay:0.2s}
+.typing-indicator span:nth-child(3){animation-delay:0.4s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
+
+.suggestions{
+  display:flex;gap:6px;padding:8px 20px;
+  flex-wrap:wrap;border-top:1px solid var(--border);
+  background:var(--bg);flex-shrink:0;
+}
+.chip{
+  padding:4px 10px;border-radius:5px;
+  font-size:11px;font-family:var(--font);
+  background:var(--bg3);border:1px solid var(--border2);
+  color:var(--text2);cursor:pointer;transition:all 0.1s;
+  white-space:nowrap;
+}
+.chip:hover{background:var(--bg4);border-color:var(--accent);color:var(--text)}
+
+.input-bar{
+  padding:12px 20px;
+  background:var(--bg2);
+  border-top:1px solid var(--border);
+  display:flex;gap:10px;align-items:center;
+  flex-shrink:0;
+}
+.input-prefix{font-size:13px;color:var(--text3);font-family:var(--font);flex-shrink:0}
+.input-wrap{flex:1;position:relative}
+#input{
+  width:100%;background:var(--bg3);
+  border:1px solid var(--border2);
+  border-radius:7px;padding:9px 14px;
+  color:var(--text);font-size:13px;font-family:var(--sans);
+  outline:none;transition:border-color 0.15s;
+}
+#input:focus{border-color:rgba(59,130,246,0.5)}
+#input::placeholder{color:var(--text3)}
+.send-btn{
+  width:34px;height:34px;border-radius:7px;
+  background:var(--accent);border:none;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all 0.1s;flex-shrink:0;
+  color:#fff;font-size:13px;
+}
+.send-btn:hover{background:var(--accent2)}
+.send-btn:disabled{background:var(--bg3);cursor:not-allowed;color:var(--text3)}
+.send-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+
+.right-panel{
+  width:220px;flex-shrink:0;
+  background:var(--bg2);
+  border-left:1px solid var(--border);
+  padding:16px;overflow-y:auto;
+}
+.panel-section{margin-bottom:20px}
+.panel-title{font-size:10px;font-family:var(--font);color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px}
+.metric-card{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:6px;padding:10px 12px;margin-bottom:8px;
+}
+.metric-label{font-size:10px;color:var(--text3);font-family:var(--font);margin-bottom:4px}
+.metric-val{font-size:16px;font-weight:600;color:var(--text);font-family:var(--font)}
+.metric-sub{font-size:10px;color:var(--text3);margin-top:2px}
+.metric-green{color:var(--green)}
+.metric-amber{color:var(--amber)}
+
+.agent-status{display:flex;flex-direction:column;gap:6px}
+.agent-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 8px;background:var(--bg3);border-radius:5px;
+  border:1px solid var(--border);
+}
+.agent-name{font-size:11px;color:var(--text2);font-family:var(--font)}
+.agent-badge{
+  font-size:9px;font-family:var(--font);
+  padding:1px 6px;border-radius:3px;
+}
+.agent-badge.ready{background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.2)}
+.agent-badge.active{background:rgba(59,130,246,0.1);color:#60a5fa;border:1px solid rgba(59,130,246,0.2)}
+.agent-badge.idle{background:var(--bg4);color:var(--text3);border:1px solid var(--border2)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">
+      <div class="logo-mark">AR</div>
+      <div>
+        <div class="logo-name">ARIA</div>
+        <div class="logo-sub">v2.0 — multi-agent</div>
+      </div>
+    </div>
+    <div class="divider-v"></div>
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      system online
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="badge">llama3.2</span>
+    <span class="badge">pgvector</span>
+    <span class="badge blue">LangGraph</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Data sources</div>
+      <div class="nav-item active">
+        <div class="nav-dot blue"></div>
+        Supplier profiles
+      </div>
+      <div class="nav-item active">
+        <div class="nav-dot green"></div>
+        ERP — SAP (mock)
+      </div>
+      <div class="nav-item active">
+        <div class="nav-dot amber"></div>
+        WMS — Warehouse
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Agents</div>
+      <div class="nav-item">
+        <div class="nav-dot blue"></div>
+        Router
+      </div>
+      <div class="nav-item">
+        <div class="nav-dot green"></div>
+        Supplier specialist
+      </div>
+      <div class="nav-item">
+        <div class="nav-dot amber"></div>
+        ERP specialist
+      </div>
+      <div class="nav-item">
+        <div class="nav-dot red"></div>
+        WMS specialist
+      </div>
+      <div class="nav-item">
+        <div class="nav-dot blue"></div>
+        Synthesis
+      </div>
+    </div>
+    <div class="sidebar-stat">
+      <div class="stat-label">cache threshold</div>
+      <div class="stat-val">0.65</div>
+      <div class="stat-sub">cosine similarity</div>
+    </div>
+  </div>
+
+  <div class="chat-area">
+    <div class="chat-header">
+      <div>
+        <div class="chat-title">Procurement Intelligence</div>
+        <div class="chat-meta">Agentic Risk & Intelligence Assistant</div>
+      </div>
+      <span class="model-tag">multi-agent · semantic cache</span>
+    </div>
+
+    <div class="messages" id="chat">
+      <div class="msg-row">
+        <div class="avatar aria">AR</div>
+        <div class="msg-content">
+          <div class="msg-header">
+            <span class="msg-name">ARIA</span>
+            <span class="msg-meta">system</span>
+          </div>
+          <div class="bubble aria">
+            Agentic Risk & Intelligence Assistant online. I have access to supplier profiles, ERP purchase orders, and WMS warehouse data across 5 suppliers. Ask me anything about delivery risk, inventory levels, overdue shipments, or procurement status.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="suggestions">
+      <div class="chip" onclick="ask('Which suppliers have the highest delivery risk?')">Highest delivery risk</div>
+      <div class="chip" onclick="ask('Are there any overdue shipments?')">Overdue shipments</div>
+      <div class="chip" onclick="ask('Which items are below reorder point?')">Low stock alerts</div>
+      <div class="chip" onclick="ask('Are there any quality holds in the warehouse?')">Quality holds</div>
+      <div class="chip" onclick="ask('Are there any overdue purchase orders?')">Overdue POs</div>
+    </div>
+
+    <div class="input-bar">
+      <span class="input-prefix">&gt;_</span>
+      <div class="input-wrap">
+        <input type="text" id="input" placeholder="Query the supply chain intelligence layer..." onkeydown="if(event.key==='Enter')sendMessage()" autocomplete="off" />
+      </div>
+      <button class="send-btn" id="send-btn" onclick="sendMessage()" aria-label="Send message">
+        <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="panel-section">
+      <div class="panel-title">Session metrics</div>
+      <div class="metric-card">
+        <div class="metric-label">queries</div>
+        <div class="metric-val" id="m-total">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">cache hits</div>
+        <div class="metric-val metric-green" id="m-hits">0</div>
+        <div class="metric-sub" id="m-rate">0% hit rate</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">avg latency</div>
+        <div class="metric-val metric-amber" id="m-latency">—</div>
+        <div class="metric-sub">last response</div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-title">Agent status</div>
+      <div class="agent-status">
+        <div class="agent-row"><span class="agent-name">router</span><span class="agent-badge ready" id="s-router">ready</span></div>
+        <div class="agent-row"><span class="agent-name">supplier</span><span class="agent-badge ready" id="s-supplier">ready</span></div>
+        <div class="agent-row"><span class="agent-name">erp</span><span class="agent-badge ready" id="s-erp">ready</span></div>
+        <div class="agent-row"><span class="agent-name">wms</span><span class="agent-badge ready" id="s-wms">ready</span></div>
+        <div class="agent-row"><span class="agent-name">synthesis</span><span class="agent-badge ready" id="s-synthesis">ready</span></div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-title">Collections</div>
+      <div class="agent-status">
+        <div class="agent-row"><span class="agent-name">aria_supplier</span><span class="agent-badge ready">5 docs</span></div>
+        <div class="agent-row"><span class="agent-name">aria_erp</span><span class="agent-badge ready">5 docs</span></div>
+        <div class="agent-row"><span class="agent-name">aria_wms</span><span class="agent-badge ready">5 docs</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let totalQueries = 0;
+let cacheHits = 0;
+let lastLatency = null;
+
+function updateMetrics(source, latency) {
+  totalQueries++;
+  if (source === 'cache') cacheHits++;
+  lastLatency = latency;
+  document.getElementById('m-total').textContent = totalQueries;
+  document.getElementById('m-hits').textContent = cacheHits;
+  const rate = totalQueries > 0 ? Math.round((cacheHits / totalQueries) * 100) : 0;
+  document.getElementById('m-rate').textContent = rate + '% hit rate';
+  document.getElementById('m-latency').textContent = latency ? latency.toFixed(0) + 'ms' : '—';
+}
+
+function setAgentStatus(agents, status) {
+  ['router','supplier','erp','wms','synthesis'].forEach(a => {
+    const el = document.getElementById('s-' + a);
+    if (!el) return;
+    if (agents.includes(a)) {
+      el.className = 'agent-badge ' + status;
+      el.textContent = status;
+    } else {
+      el.className = 'agent-badge idle';
+      el.textContent = 'idle';
+    }
+  });
+}
+
+function resetAgentStatus() {
+  ['router','supplier','erp','wms','synthesis'].forEach(a => {
+    const el = document.getElementById('s-' + a);
+    if (el) { el.className = 'agent-badge ready'; el.textContent = 'ready'; }
+  });
+}
+
+async function sendMessage() {
+  const input = document.getElementById('input');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  await ask(q);
+}
+
+async function ask(question) {
+  const chat = document.getElementById('chat');
+  const btn = document.getElementById('send-btn');
+  document.getElementById('input').value = '';
+  btn.disabled = true;
+
+  const userRow = document.createElement('div');
+  userRow.className = 'msg-row user';
+  userRow.innerHTML = `
+    <div class="avatar user">U</div>
+    <div class="msg-content">
+      <div class="msg-header" style="flex-direction:row-reverse">
+        <span class="msg-name">you</span>
+      </div>
+      <div class="bubble user">${question}</div>
+    </div>`;
+  chat.appendChild(userRow);
+
+  const agentRow = document.createElement('div');
+  agentRow.className = 'msg-row';
+  agentRow.innerHTML = `
+    <div class="avatar aria">AR</div>
+    <div class="msg-content">
+      <div class="msg-header">
+        <span class="msg-name">ARIA</span>
+        <span class="msg-meta" id="live-meta-${Date.now()}">processing...</span>
+      </div>
+      <div class="bubble aria" id="live-bubble-${Date.now()}">
+        <div class="typing-indicator"><span></span><span></span><span></span></div>
+      </div>
+    </div>`;
+  chat.appendChild(agentRow);
+  chat.scrollTop = chat.scrollHeight;
+
+  const metaId = agentRow.querySelector('.msg-meta').id;
+  const bubbleId = agentRow.querySelector('.bubble').id;
+
+  setAgentStatus(['router','supplier','erp','wms','synthesis'], 'active');
+
+  try {
+    const res = await fetch('/ask', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({question})
+    });
+    const data = await res.json();
+    const src = data.source;
+    const lat = data.latency_ms;
+    const answer = data.answer;
+
+    const srcTag = src === 'cache'
+      ? `<span class="source-tag cache">⚡ cache</span>`
+      : `<span class="source-tag multi">◈ multi-agent</span>`;
+
+    document.getElementById(metaId).innerHTML = `${srcTag} <span style="color:var(--text3);font-size:10px;font-family:var(--font)">${lat ? lat.toFixed(0)+'ms' : ''}</span>`;
+    document.getElementById(bubbleId).innerHTML = answer.replace(/\n/g,'<br>');
+
+    updateMetrics(src, lat);
+    resetAgentStatus();
+
+  } catch(err) {
+    document.getElementById(bubbleId).innerHTML = '<span style="color:var(--red)">Connection error — is the server running?</span>';
+    resetAgentStatus();
+  }
+
+  btn.disabled = false;
+  chat.scrollTop = chat.scrollHeight;
+}
+</script>
+</body>
+</html>
