@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+import re
 import time
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
@@ -31,45 +32,47 @@ llm = OllamaLLM(model="llama3.2", base_url=ollama_host)
 # --- CREATE 3 SEPARATE VECTOR COLLECTIONS ---
 print("Setting up specialist vector stores...")
 
-supplier_store = PGVector.from_documents(
-    documents=[Document(page_content=t, metadata={"source": "supplier"}) for t in supplier_documents],
-    embedding=embeddings,
-    connection_string=CONNECTION_STRING,
-    collection_name="aria_supplier",
-    pre_delete_collection=True
-)
+def _load_or_build_store(collection_name, documents, source_label):
+    """Reuse an already-indexed collection instead of re-embedding every
+    document on every process start. Full rebuilds happen only via reindex_all()."""
+    store = PGVector(
+        connection_string=CONNECTION_STRING,
+        embedding_function=embeddings,
+        collection_name=collection_name,
+    )
+    if store.similarity_search("ping", k=1):
+        print(f"[STARTUP] '{collection_name}' already indexed — reusing existing collection")
+        return store
+    print(f"[STARTUP] Indexing '{collection_name}'...")
+    return PGVector.from_documents(
+        documents=[Document(page_content=t, metadata={"source": source_label}) for t in documents],
+        embedding=embeddings,
+        connection_string=CONNECTION_STRING,
+        collection_name=collection_name,
+    )
 
-erp_store = PGVector.from_documents(
-    documents=[Document(page_content=t, metadata={"source": "erp"}) for t in erp_data],
-    embedding=embeddings,
-    connection_string=CONNECTION_STRING,
-    collection_name="aria_erp",
-    pre_delete_collection=True
-)
-
-wms_store = PGVector.from_documents(
-    documents=[Document(page_content=t, metadata={"source": "wms"}) for t in wms_data],
-    embedding=embeddings,
-    connection_string=CONNECTION_STRING,
-    collection_name="aria_wms",
-    pre_delete_collection=True
-)
+supplier_store = _load_or_build_store("aria_supplier", supplier_documents, "supplier")
+erp_store = _load_or_build_store("aria_erp", erp_data, "erp")
+wms_store = _load_or_build_store("aria_wms", wms_data, "wms")
 print("All specialist stores ready!")
 
 # --- REDIS SEMANTIC CACHE ---
 import redis
 import json
-import hashlib
 
 class RedisSemanticCache:
-    def __init__(self, embedding_model, threshold=0.65, redis_host="localhost", redis_port=6379):
+    def __init__(self, embedding_model, threshold=0.65, redis_host="localhost", redis_port=6379,
+                 max_entries=500, ttl_seconds=7 * 24 * 3600):
         self.embedding_model = embedding_model
         self.threshold = threshold
+        self.max_entries = max_entries
+        self.ttl_seconds = ttl_seconds
         self.hits = 0
         self.misses = 0
         # Connect to Redis
         self.redis = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
         self.cache_key = "aria:semantic_cache"
+        self.lock_key = "aria:semantic_cache:lock"
         print(f"[REDIS] Connected to Redis at {redis_host}:{redis_port}")
 
     def cosine_similarity(self, a, b):
@@ -80,17 +83,30 @@ class RedisSemanticCache:
             return 0
         return dot / (norm_a * norm_b)
 
-    def get(self, question):
-        query_embedding = self.embedding_model.embed_query(question)
-
-        # Load all cached entries from Redis
+    def _load_entries(self):
         cached_data = self.redis.get(self.cache_key)
         if not cached_data:
+            return []
+        entries = json.loads(cached_data)
+        if self.ttl_seconds is None:
+            return entries
+        cutoff = time.time() - self.ttl_seconds
+        return [e for e in entries if e.get("timestamp", 0) >= cutoff]
+
+    def get(self, question):
+        try:
+            query_embedding = self.embedding_model.embed_query(question)
+            entries = self._load_entries()
+        except redis.RedisError as e:
+            print(f"[REDIS] get() failed, treating as cache miss: {e}")
+            self.misses += 1
+            return None
+
+        if not entries:
             self.misses += 1
             print(f"[CACHE MISS] Redis cache empty | '{question}'")
             return None
 
-        entries = json.loads(cached_data)
         best_score = 0
         best_answer = None
 
@@ -110,26 +126,33 @@ class RedisSemanticCache:
         return None
 
     def set(self, question, answer):
-        query_embedding = self.embedding_model.embed_query(question)
-
-        # Load existing entries
-        cached_data = self.redis.get(self.cache_key)
-        entries = json.loads(cached_data) if cached_data else []
-
-        # Add new entry
-        entries.append({
-            "embedding": query_embedding,
-            "question": question,
-            "answer": answer
-        })
-
-        # Save back to Redis — persists forever
-        self.redis.set(self.cache_key, json.dumps(entries))
-        print(f"[REDIS] Cached answer for: '{question}'")
+        try:
+            query_embedding = self.embedding_model.embed_query(question)
+            # Lock guards the read-modify-write below — without it, concurrent
+            # requests can race on the get/append/set and silently drop entries.
+            with self.redis.lock(self.lock_key, timeout=10):
+                entries = self._load_entries()
+                entries.append({
+                    "embedding": query_embedding,
+                    "question": question,
+                    "answer": answer,
+                    "timestamp": time.time()
+                })
+                # Cap growth — without this the blob (and every get/set scan
+                # over it) grows unbounded forever.
+                if len(entries) > self.max_entries:
+                    entries = entries[-self.max_entries:]
+                self.redis.set(self.cache_key, json.dumps(entries))
+            print(f"[REDIS] Cached answer for: '{question}'")
+        except redis.RedisError as e:
+            print(f"[REDIS] set() failed, skipping cache write: {e}")
 
     def stats(self):
-        cached_data = self.redis.get(self.cache_key)
-        entries = json.loads(cached_data) if cached_data else []
+        try:
+            entries = self._load_entries()
+        except redis.RedisError as e:
+            print(f"[REDIS] stats() failed: {e}")
+            entries = []
         total = self.hits + self.misses
         hit_rate = (self.hits / total * 100) if total > 0 else 0
         return {
@@ -138,6 +161,7 @@ class RedisSemanticCache:
             "cache_misses": self.misses,
             "hit_rate": f"{hit_rate:.1f}%",
             "cached_entries": len(entries),
+            "max_entries": self.max_entries,
             "cache_backend": "Redis",
             "persistent": True
         }
@@ -159,23 +183,28 @@ class ARIAState(TypedDict):
     final_answer: str
 
 # --- AGENT 1: ROUTER ---
+def _contains_keyword(question: str, keyword: str) -> bool:
+    # Word-boundary match — plain substring containment let short keywords
+    # like "po" match inside "support"/"report"/"deployment" and misroute.
+    return re.search(rf"\b{re.escape(keyword)}\b", question) is not None
+
 def router_agent(state: ARIAState):
     question = state["question"].lower()
     agents = []
 
-    if any(word in question for word in [
+    if any(_contains_keyword(question, word) for word in [
         "risk", "delay", "lead time", "delivery", "supplier",
         "vendor", "reliable", "unreliable", "performance", "on-time"
     ]):
         agents.append("supplier")
 
-    if any(word in question for word in [
+    if any(_contains_keyword(question, word) for word in [
         "purchase order", "po", "invoice", "inventory", "reorder",
         "stock", "replenish", "erp", "payment", "overdue order"
     ]):
         agents.append("erp")
 
-    if any(word in question for word in [
+    if any(_contains_keyword(question, word) for word in [
         "shipment", "warehouse", "quality hold", "overdue", "customs",
         "inbound", "wms", "shipping", "carrier", "dispatch"
     ]):
@@ -261,7 +290,11 @@ Question: {state['question']}
 
 Answer:"""
 
-    answer = llm.invoke(prompt)
+    try:
+        answer = llm.invoke(prompt)
+    except Exception as e:
+        print(f"[SYNTHESIS AGENT] LLM call failed: {e}")
+        return {"final_answer": "ARIA's language model is currently unavailable. Please try again shortly."}
 
     # --- GUARDRAIL 3: Detect if LLM admitted it doesn't know ---
     uncertainty_phrases = [
@@ -337,6 +370,12 @@ def ask_aria_multi(question: str) -> dict:
 def reindex_all():
     global supplier_store, erp_store, wms_store
     print("[REINDEX] Starting reindex of all collections...")
+
+    # Release the old stores' DB connections before replacing them —
+    # otherwise repeated reindexing leaks one engine per call.
+    for old_store in (supplier_store, erp_store, wms_store):
+        if hasattr(old_store._bind, "dispose"):
+            old_store._bind.dispose()
 
     supplier_store = PGVector.from_documents(
         documents=[Document(page_content=t, metadata={"source": "supplier"}) for t in supplier_documents],
