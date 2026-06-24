@@ -123,18 +123,21 @@ Two-node graph, kept intentionally lean:
 
 ```
 aria-supply-chain-agent/
-├── aria_graph.py        # LangGraph retrieval + synthesis pipeline, Redis cache,
-│                        # session memory, feedback/self-learning loop
-├── main.py              # FastAPI server with all endpoints
-├── ui.html              # Bloomberg-style dark terminal UI
-├── supplier_docs.py     # Supplier profile data
-├── erp_data.py          # Simulated SAP ERP data
-├── wms_data.py          # Simulated WMS warehouse data
-├── Dockerfile           # Container configuration
-├── requirements.txt     # Python dependencies
-├── .env.example         # Required/optional environment variables
-├── .dockerignore        # Docker build exclusions
-└── .gitignore           # Git exclusions
+├── app/
+│   ├── main.py           # FastAPI server with all endpoints
+│   └── aria_graph.py     # LangGraph retrieval + synthesis pipeline, Redis cache,
+│                         # session memory, feedback/self-learning loop
+├── data/
+│   ├── supplier_docs.py  # Supplier profile data
+│   ├── erp_data.py       # Simulated SAP ERP data
+│   └── wms_data.py       # Simulated WMS warehouse data
+├── static/
+│   └── ui.html           # Bloomberg-style dark terminal UI
+├── Dockerfile            # Container configuration
+├── requirements.txt      # Python dependencies
+├── .env.example          # Required/optional environment variables
+├── .dockerignore         # Docker build exclusions
+└── .gitignore            # Git exclusions
 ```
 
 ---
@@ -188,7 +191,7 @@ Open **http://localhost:8000/ui**
 python -m venv venv
 venv\Scripts\activate  # Windows
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ---

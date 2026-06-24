@@ -10,9 +10,9 @@ from langchain_ollama import OllamaLLM
 from langchain_community.vectorstores import PGVector
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
-from supplier_docs import supplier_documents
-from erp_data import erp_data
-from wms_data import wms_data
+from data.supplier_docs import supplier_documents
+from data.erp_data import erp_data
+from data.wms_data import wms_data
 
 # --- SHARED SETUP ---
 print("Loading embedding model...")

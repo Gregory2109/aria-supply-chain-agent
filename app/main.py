@@ -1,9 +1,12 @@
+from pathlib import Path
 from typing import Optional
 from fastapi import BackgroundTasks, FastAPI
 from fastapi.responses import FileResponse
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
-from aria_graph import ask_aria_multi, cache, reindex_all, record_feedback, promote_learned_knowledge
+from app.aria_graph import ask_aria_multi, cache, reindex_all, record_feedback, promote_learned_knowledge
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 app = FastAPI(title="ARIA — Agentic Risk & Intelligence Assistant")
 
@@ -54,4 +57,4 @@ async def health():
 
 @app.get("/ui")
 async def ui():
-    return FileResponse("ui.html")
+    return FileResponse(STATIC_DIR / "ui.html")
