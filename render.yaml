@@ -1,0 +1,45 @@
+# Render Blueprint — see https://render.com/docs/blueprint-spec
+#
+# Provisions the ARIA web service + a managed Postgres instance.
+# Redis is NOT included here — provision it manually via the Render
+# dashboard (New -> Key Value / Redis) and paste its connection string
+# into the web service's REDIS_URL env var. Render's Redis/Key-Value
+# blueprint syntax has changed during 2025; doing this one step by hand
+# avoids deploying against a schema that may no longer be current.
+#
+# After first deploy, connect to the Postgres instance and run:
+#   CREATE EXTENSION IF NOT EXISTS vector;
+# pgvector must be enabled before the app's first /ask or /reindex call.
+
+services:
+  - type: web
+    name: aria-supply-chain-agent
+    runtime: docker
+    plan: standard # embeddings (sentence-transformers + torch CPU) alone use
+                    # ~500-600MB RSS in local testing; the cheapest "starter"
+                    # tier (512MB) will likely OOM. Size up if startup crashes.
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aria-postgres
+          property: connectionString
+      - key: REDIS_URL
+        sync: false # paste in manually after provisioning Redis (see note above)
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false # set in Render dashboard secrets
+      - key: GROQ_MODEL
+        value: llama-3.1-8b-instant
+      - key: ARIA_API_KEY
+        sync: false # set in Render dashboard secrets — protects /reindex and /cache/clear
+      - key: HF_HUB_DISABLE_TELEMETRY
+        value: "1"
+      - key: TOKENIZERS_PARALLELISM
+        value: "false"
+
+databases:
+  - name: aria-postgres
+    plan: starter
+    postgresMajorVersion: 16

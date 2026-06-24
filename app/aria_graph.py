@@ -6,10 +6,10 @@ import time
 import uuid
 from typing import TypedDict, List, Dict, Optional
 from langgraph.graph import StateGraph, END
-from langchain_ollama import OllamaLLM
 from langchain_community.vectorstores import PGVector
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
+from langchain_core.output_parsers import StrOutputParser
 from data.supplier_docs import supplier_documents
 from data.erp_data import erp_data
 from data.wms_data import wms_data
@@ -26,8 +26,23 @@ CONNECTION_STRING = os.getenv(
     "postgresql+psycopg2://postgres:password@localhost:5432/supplychain"
 )
 
-ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-llm = OllamaLLM(model="llama3.2", base_url=ollama_host)
+# LLM_PROVIDER=ollama (default, local dev) or groq (hosted, used in production
+# where the host has no GPU/RAM budget to run Ollama itself).
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
+if LLM_PROVIDER == "groq":
+    from langchain_groq import ChatGroq
+    groq_model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    llm = ChatGroq(model=groq_model, api_key=os.getenv("GROQ_API_KEY"))
+    print(f"[LLM] Using Groq ({groq_model})")
+else:
+    from langchain_ollama import OllamaLLM
+    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    llm = OllamaLLM(model="llama3.2", base_url=ollama_host)
+    print(f"[LLM] Using Ollama ({ollama_host})")
+
+# ChatGroq returns a message object, OllamaLLM returns a plain string —
+# normalize both to str so synthesis_agent doesn't need to know which backend is active.
+llm_chain = llm | StrOutputParser()
 
 # --- SINGLE MERGED KNOWLEDGE COLLECTION ---
 # One combined vector store replaces the old router + 3 separate specialist
@@ -70,7 +85,7 @@ import redis
 import json
 
 class RedisSemanticCache:
-    def __init__(self, embedding_model, threshold=0.65, redis_host="localhost", redis_port=6379,
+    def __init__(self, embedding_model, threshold=0.65, redis_url=None, redis_host="localhost", redis_port=6379,
                  max_entries=500, ttl_seconds=7 * 24 * 3600):
         self.embedding_model = embedding_model
         self.threshold = threshold
@@ -78,11 +93,16 @@ class RedisSemanticCache:
         self.ttl_seconds = ttl_seconds
         self.hits = 0
         self.misses = 0
-        # Connect to Redis
-        self.redis = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+        # Managed Redis (e.g. Render) is reached via a connection URL;
+        # local dev falls back to a plain host/port.
+        if redis_url:
+            self.redis = redis.Redis.from_url(redis_url, decode_responses=True)
+            print(f"[REDIS] Connected to Redis via REDIS_URL")
+        else:
+            self.redis = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+            print(f"[REDIS] Connected to Redis at {redis_host}:{redis_port}")
         self.cache_key = "aria:semantic_cache"
         self.lock_key = "aria:semantic_cache:lock"
-        print(f"[REDIS] Connected to Redis at {redis_host}:{redis_port}")
 
     def cosine_similarity(self, a, b):
         dot = sum(x * y for x, y in zip(a, b))
@@ -180,7 +200,13 @@ class RedisSemanticCache:
         print("[REDIS] Cache cleared")
 
 print("Initializing Redis semantic cache...")
-cache = RedisSemanticCache(embeddings, threshold=0.65)
+cache = RedisSemanticCache(
+    embeddings,
+    threshold=0.65,
+    redis_url=os.getenv("REDIS_URL"),
+    redis_host=os.getenv("REDIS_HOST", "localhost"),
+    redis_port=int(os.getenv("REDIS_PORT", "6379")),
+)
 print("Redis semantic cache ready!")
 
 redis_client = cache.redis  # shared connection, also used by the feedback/learning loop below
@@ -254,7 +280,7 @@ Question: {state['question']}
 Answer:"""
 
     try:
-        answer = llm.invoke(prompt)
+        answer = llm_chain.invoke(prompt)
     except Exception as e:
         print(f"[SYNTHESIS AGENT] LLM call failed: {e}")
         return {"final_answer": "ARIA's language model is currently unavailable. Please try again shortly."}

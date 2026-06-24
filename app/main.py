@@ -1,12 +1,21 @@
+import os
 from pathlib import Path
 from typing import Optional
-from fastapi import BackgroundTasks, FastAPI
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from app.aria_graph import ask_aria_multi, cache, reindex_all, record_feedback, promote_learned_knowledge
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+ARIA_API_KEY = os.getenv("ARIA_API_KEY")
+if not ARIA_API_KEY:
+    print("[AUTH] WARNING: ARIA_API_KEY not set — /reindex and /cache/clear are UNAUTHENTICATED")
+
+def require_api_key(x_api_key: Optional[str] = Header(None)):
+    if ARIA_API_KEY and x_api_key != ARIA_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
 
 app = FastAPI(title="ARIA — Agentic Risk & Intelligence Assistant")
 
@@ -37,7 +46,7 @@ async def feedback(fb: Feedback, background_tasks: BackgroundTasks):
     background_tasks.add_task(promote_learned_knowledge)
     return {"status": "recorded"}
 
-@app.post("/reindex")
+@app.post("/reindex", dependencies=[Depends(require_api_key)])
 async def reindex():
     result = await run_in_threadpool(reindex_all)
     return result
@@ -46,7 +55,7 @@ async def reindex():
 async def cache_stats():
     return cache.stats()
 
-@app.get("/cache/clear")
+@app.get("/cache/clear", dependencies=[Depends(require_api_key)])
 async def clear_cache():
     cache.clear()
     return {"status": "cache cleared"}

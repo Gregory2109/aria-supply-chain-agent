@@ -45,13 +45,13 @@ Final answer → FastAPI → UI
 
 | Layer | Technology |
 |---|---|
-| LLM | Llama 3.2 via Ollama (local, zero API cost) |
+| LLM | Llama 3.2 via Ollama (local dev, zero API cost) — swaps to Groq (`LLM_PROVIDER=groq`) in production |
 | Orchestration | LangChain + LangGraph |
 | Vector DB | pgvector (PostgreSQL extension) |
 | Embeddings | all-MiniLM-L6-v2 (HuggingFace, local) |
 | Semantic Cache | Redis (persistent across restarts) |
-| API | FastAPI + async threadpool |
-| Deployment | Docker |
+| API | FastAPI + async threadpool, API-key auth on admin endpoints |
+| Deployment | Docker, Render Blueprint |
 | Data Sources | Supplier profiles, SAP ERP (mock), WMS (mock) |
 
 ---
@@ -134,6 +134,7 @@ aria-supply-chain-agent/
 ├── static/
 │   └── ui.html           # Bloomberg-style dark terminal UI
 ├── Dockerfile            # Container configuration
+├── render.yaml           # Render Blueprint (web service + Postgres)
 ├── requirements.txt      # Python dependencies
 ├── .env.example          # Required/optional environment variables
 ├── .dockerignore         # Docker build exclusions
@@ -148,9 +149,11 @@ aria-supply-chain-agent/
 |---|---|---|
 | POST | `/ask` | Query ARIA — checks Redis cache first, then retrieval + synthesis pipeline. Accepts an optional `session_id` for multi-turn context |
 | POST | `/feedback` | Record 👍/👎 on an answer; helpful pairs are promoted into the knowledge store in the background |
-| POST | `/reindex` | Re-index the `aria_knowledge` pgvector collection from source data |
+| POST | `/reindex` 🔒 | Re-index the `aria_knowledge` pgvector collection from source data |
 | GET | `/cache/stats` | Redis cache metrics: hits, misses, hit rate, entries |
-| GET | `/cache/clear` | Clear Redis cache |
+| GET | `/cache/clear` 🔒 | Clear Redis cache |
+
+🔒 = requires an `X-API-Key` header matching `ARIA_API_KEY` once that env var is set (see [Production Deployment](#production-deployment)). Unset locally, so these are open in dev.
 | GET | `/ui` | Bloomberg-style chat interface |
 | GET | `/docs` | FastAPI interactive API documentation |
 | GET | `/` | Health check |
@@ -196,6 +199,36 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ---
 
+## Production Deployment
+
+Local dev uses Ollama for the LLM since it's free and runs on your own GPU/CPU.
+Most cloud hosts don't have the RAM/CPU budget for that, so production swaps
+to a hosted LLM via `LLM_PROVIDER=groq` (no code change — Ollama and Groq are
+both wired up behind the same `llm_chain` in `aria_graph.py`).
+
+### Deploy to Render
+
+1. **Get a Groq API key** — [console.groq.com](https://console.groq.com), free tier available.
+2. **Push this repo to GitHub** (already done if you're reading this from the repo).
+3. **New Blueprint** on Render, pointing at this repo — it reads `render.yaml` and provisions the web service + a managed Postgres instance.
+4. **Enable pgvector** — once Postgres is up, connect (Render dashboard → Connect) and run:
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS vector;
+   ```
+5. **Add Redis** — Render dashboard → New → Key Value (or Redis, depending on what's offered at the time). Copy its connection string into the web service's `REDIS_URL` env var.
+6. **Set secrets** on the web service: `GROQ_API_KEY`, `ARIA_API_KEY` (pick any strong random string — this is what protects `/reindex` and `/cache/clear`).
+7. Deploy. Your public URL is whatever Render assigns (e.g. `https://aria-supply-chain-agent.onrender.com`) — the UI is at `/ui`.
+
+Calling a protected endpoint from outside:
+```bash
+curl -X POST https://<your-app>.onrender.com/reindex \
+  -H "X-API-Key: <your ARIA_API_KEY>"
+```
+
+**Sizing note:** the embedding model (sentence-transformers + torch, CPU) alone used ~500-600MB RAM in local testing, separate from whatever LLM you use. `render.yaml` defaults to Render's `standard` plan for the web service — the cheapest tier will likely OOM on startup.
+
+---
+
 ## Production Roadmap
 
 | Feature | Status |
@@ -206,6 +239,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | Multi-turn session memory | ✅ Complete |
 | Feedback-driven self-learning loop | ✅ Complete |
 | /reindex endpoint for live data | ✅ Complete |
+| Swappable hosted LLM backend (Groq) + API-key auth | ✅ Complete |
+| Render deployment blueprint | ✅ Complete |
 | SAP OData live connector | 🔄 In progress |
 | n8n webhook automation | 🔄 Planned |
 | HDBSCAN supplier clustering | 🔄 Planned |
