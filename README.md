@@ -17,30 +17,26 @@ ARIA is a production-grade agentic AI system that gives procurement and supply c
 
 Instead of manually searching through supplier documents, purchase orders, and shipment records, users ask ARIA natural language questions and get grounded, source-cited answers in seconds.
 
-**Key capability:** ARIA uses a Router Agent to intelligently dispatch queries to specialized agents — each with their own dedicated vector store — then synthesizes their outputs into a single coherent answer.
+**Key capability:** ARIA retrieves across a single merged knowledge store (supplier, ERP, and WMS data), synthesizes a grounded answer with hallucination guardrails, and learns from user feedback over time.
 
 ---
 
 ## Architecture
 
 ```
-User Query
+User Query (+ session_id)
     ↓
 Redis Semantic Cache (persistent, sub-50ms on hits)
     ↓ cache miss
-Router Agent — reads query, dispatches to specialists
+Retrieve Agent — similarity search over aria_knowledge (pgvector)
     ↓
-┌─────────────────────────────────────────┐
-│                                         │
-Supplier Agent    ERP Agent    WMS Agent
-(pgvector)       (pgvector)   (pgvector)
-aria_supplier    aria_erp     aria_wms
-│                                         │
-└─────────────────────────────────────────┘
-    ↓
-Synthesis Agent — combines outputs, applies guardrails
+Synthesis Agent — grounds answer in retrieved context + recent
+                   session history, applies guardrails
     ↓
 Final answer → FastAPI → UI
+    ↓
+👍 / 👎 feedback → Redis log → promoted into aria_knowledge
+                                 (background, off the request path)
 ```
 
 ---
@@ -62,13 +58,20 @@ Final answer → FastAPI → UI
 
 ## Features
 
-### Multi-agent LangGraph architecture
-Five specialized agents working in coordination:
-- **Router Agent** — reads the query and decides which specialists to call
-- **Supplier Specialist** — searches supplier risk, lead time, and delivery data
-- **ERP Specialist** — searches purchase orders, inventory levels, and invoice status
-- **WMS Specialist** — searches inbound shipments, quality holds, and warehouse alerts
-- **Synthesis Agent** — combines all specialist outputs into one coherent answer
+### LangGraph retrieval + synthesis pipeline
+Two-node graph, kept intentionally lean:
+- **Retrieve Agent** — single similarity search over the merged knowledge store (replaces the old router + 3 separate specialist collections, cutting retrieval to one DB call per query)
+- **Synthesis Agent** — grounds the answer in retrieved context plus recent session history, applies guardrails
+
+### Multi-turn session memory
+- Each `/ask` call carries a `session_id`; the UI persists it in `localStorage`
+- Last 6 turns per session are kept in-process and fed to the synthesis prompt so follow-ups like "what about that supplier?" resolve correctly
+- History is used only to resolve references — never treated as a source of facts
+
+### Feedback-driven self-learning
+- 👍 / 👎 buttons on every answer call `POST /feedback`
+- Feedback is logged to Redis inline (cheap — no embedding/LLM call on the request path)
+- Helpful Q&A pairs are promoted into the `aria_knowledge` vector store as a background task, so future similar questions retrieve richer context without adding latency to `/ask` or `/feedback`
 
 ### Redis-backed semantic caching
 - Cache persists across server restarts
@@ -79,10 +82,10 @@ Five specialized agents working in coordination:
 - `/cache/clear` endpoint for manual cache invalidation
 
 ### RAG over enterprise data
-- 15 documents indexed across 3 dedicated pgvector collections
+- 15 seed documents indexed in a single merged pgvector collection (`aria_knowledge`) spanning supplier, ERP, and WMS sources
 - Semantic similarity search using vector embeddings
-- Each specialist agent searches only its own collection for precision
 - Source citations included in every answer
+- Grows over time as helpful feedback is promoted back into the collection
 
 ### Hallucination guardrails
 - Refuses to answer when no relevant context is retrieved
@@ -91,7 +94,7 @@ Five specialized agents working in coordination:
 - Prompt-level instructions to never fabricate supplier names, numbers, or dates
 
 ### /reindex endpoint
-- POST `/reindex` triggers live re-indexing of all 3 collections
+- POST `/reindex` triggers a live rebuild of the `aria_knowledge` collection from source data
 - Designed for n8n webhook integration — SAP posts update → n8n calls `/reindex` → ARIA stays current
 - Production-ready for live SAP OData connector swap
 
@@ -111,7 +114,7 @@ Five specialized agents working in coordination:
 | LLM response latency | 3,000 to 10,000ms |
 | Latency improvement on cache hits | 99.5%+ |
 | Cache similarity threshold | 0.65 cosine similarity |
-| Documents indexed | 15 (5 supplier + 5 ERP + 5 WMS) |
+| Documents indexed | 15 seed docs in one merged collection (+ learned Q&A pairs over time) |
 | Semantic match example | "unreliable vendors" matched "highest delivery risk" at 0.955 similarity |
 
 ---
@@ -120,15 +123,16 @@ Five specialized agents working in coordination:
 
 ```
 aria-supply-chain-agent/
-├── aria_graph.py        # Multi-agent LangGraph pipeline + Redis cache
+├── aria_graph.py        # LangGraph retrieval + synthesis pipeline, Redis cache,
+│                        # session memory, feedback/self-learning loop
 ├── main.py              # FastAPI server with all endpoints
 ├── ui.html              # Bloomberg-style dark terminal UI
 ├── supplier_docs.py     # Supplier profile data
 ├── erp_data.py          # Simulated SAP ERP data
 ├── wms_data.py          # Simulated WMS warehouse data
-├── agent.py             # Legacy single-agent (reference only)
 ├── Dockerfile           # Container configuration
 ├── requirements.txt     # Python dependencies
+├── .env.example         # Required/optional environment variables
 ├── .dockerignore        # Docker build exclusions
 └── .gitignore           # Git exclusions
 ```
@@ -139,8 +143,9 @@ aria-supply-chain-agent/
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/ask` | Query ARIA — checks Redis cache first, then multi-agent pipeline |
-| POST | `/reindex` | Re-index all 3 pgvector collections from source data |
+| POST | `/ask` | Query ARIA — checks Redis cache first, then retrieval + synthesis pipeline. Accepts an optional `session_id` for multi-turn context |
+| POST | `/feedback` | Record 👍/👎 on an answer; helpful pairs are promoted into the knowledge store in the background |
+| POST | `/reindex` | Re-index the `aria_knowledge` pgvector collection from source data |
 | GET | `/cache/stats` | Redis cache metrics: hits, misses, hit rate, entries |
 | GET | `/cache/clear` | Clear Redis cache |
 | GET | `/ui` | Bloomberg-style chat interface |
@@ -192,9 +197,11 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 | Feature | Status |
 |---|---|
-| Multi-agent LangGraph | ✅ Complete |
+| LangGraph retrieval + synthesis pipeline | ✅ Complete |
 | Redis persistent cache | ✅ Complete |
 | Hallucination guardrails | ✅ Complete |
+| Multi-turn session memory | ✅ Complete |
+| Feedback-driven self-learning loop | ✅ Complete |
 | /reindex endpoint for live data | ✅ Complete |
 | SAP OData live connector | 🔄 In progress |
 | n8n webhook automation | 🔄 Planned |

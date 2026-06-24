@@ -5,3 +5,5 @@ __pycache__/
 .env
 model_cache/
 *.vhdx
+*.log
+*.pid

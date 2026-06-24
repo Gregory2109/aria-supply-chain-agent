@@ -2,9 +2,9 @@ from dotenv import load_dotenv
 load_dotenv()
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-import re
 import time
-from typing import TypedDict, List
+import uuid
+from typing import TypedDict, List, Dict, Optional
 from langgraph.graph import StateGraph, END
 from langchain_ollama import OllamaLLM
 from langchain_community.vectorstores import PGVector
@@ -29,34 +29,43 @@ CONNECTION_STRING = os.getenv(
 ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 llm = OllamaLLM(model="llama3.2", base_url=ollama_host)
 
-# --- CREATE 3 SEPARATE VECTOR COLLECTIONS ---
-print("Setting up specialist vector stores...")
+# --- SINGLE MERGED KNOWLEDGE COLLECTION ---
+# One combined vector store replaces the old router + 3 separate specialist
+# collections — a question now costs one retrieval call instead of up to three.
+print("Setting up knowledge store...")
 
-def _load_or_build_store(collection_name, documents, source_label):
+KNOWLEDGE_COLLECTION = "aria_knowledge"
+
+def _all_seed_documents():
+    return (
+        [Document(page_content=t, metadata={"source": "supplier"}) for t in supplier_documents]
+        + [Document(page_content=t, metadata={"source": "erp"}) for t in erp_data]
+        + [Document(page_content=t, metadata={"source": "wms"}) for t in wms_data]
+    )
+
+def _load_or_build_store():
     """Reuse an already-indexed collection instead of re-embedding every
     document on every process start. Full rebuilds happen only via reindex_all()."""
     store = PGVector(
         connection_string=CONNECTION_STRING,
         embedding_function=embeddings,
-        collection_name=collection_name,
+        collection_name=KNOWLEDGE_COLLECTION,
     )
     if store.similarity_search("ping", k=1):
-        print(f"[STARTUP] '{collection_name}' already indexed — reusing existing collection")
+        print(f"[STARTUP] '{KNOWLEDGE_COLLECTION}' already indexed — reusing existing collection")
         return store
-    print(f"[STARTUP] Indexing '{collection_name}'...")
+    print(f"[STARTUP] Indexing '{KNOWLEDGE_COLLECTION}'...")
     return PGVector.from_documents(
-        documents=[Document(page_content=t, metadata={"source": source_label}) for t in documents],
+        documents=_all_seed_documents(),
         embedding=embeddings,
         connection_string=CONNECTION_STRING,
-        collection_name=collection_name,
+        collection_name=KNOWLEDGE_COLLECTION,
     )
 
-supplier_store = _load_or_build_store("aria_supplier", supplier_documents, "supplier")
-erp_store = _load_or_build_store("aria_erp", erp_data, "erp")
-wms_store = _load_or_build_store("aria_wms", wms_data, "wms")
-print("All specialist stores ready!")
+knowledge_store = _load_or_build_store()
+print("Knowledge store ready!")
 
-# --- REDIS SEMANTIC CACHE ---
+# --- REDIS (semantic cache + feedback log) ---
 import redis
 import json
 
@@ -169,112 +178,65 @@ class RedisSemanticCache:
     def clear(self):
         self.redis.delete(self.cache_key)
         print("[REDIS] Cache cleared")
+
 print("Initializing Redis semantic cache...")
 cache = RedisSemanticCache(embeddings, threshold=0.65)
 print("Redis semantic cache ready!")
 
+redis_client = cache.redis  # shared connection, also used by the feedback/learning loop below
+
 # --- DEFINE STATE ---
 class ARIAState(TypedDict):
     question: str
-    agents_to_call: List[str]
-    supplier_context: str
-    erp_context: str
-    wms_context: str
+    session_id: str
+    history: List[dict]
+    context: str
     final_answer: str
 
-# --- AGENT 1: ROUTER ---
-def _contains_keyword(question: str, keyword: str) -> bool:
-    # Word-boundary match — plain substring containment let short keywords
-    # like "po" match inside "support"/"report"/"deployment" and misroute.
-    return re.search(rf"\b{re.escape(keyword)}\b", question) is not None
+# --- SESSION MEMORY (short-term, multi-turn, in-process) ---
+MAX_HISTORY_TURNS = 6
+_conversation_memory: Dict[str, List[dict]] = {}
 
-def router_agent(state: ARIAState):
-    question = state["question"].lower()
-    agents = []
+def _get_history(session_id: str) -> List[dict]:
+    return _conversation_memory.get(session_id, [])
 
-    if any(_contains_keyword(question, word) for word in [
-        "risk", "delay", "lead time", "delivery", "supplier",
-        "vendor", "reliable", "unreliable", "performance", "on-time"
-    ]):
-        agents.append("supplier")
+def _append_history(session_id: str, question: str, answer: str):
+    history = _conversation_memory.setdefault(session_id, [])
+    history.append({"question": question, "answer": answer})
+    if len(history) > MAX_HISTORY_TURNS:
+        del history[:-MAX_HISTORY_TURNS]
 
-    if any(_contains_keyword(question, word) for word in [
-        "purchase order", "po", "invoice", "inventory", "reorder",
-        "stock", "replenish", "erp", "payment", "overdue order"
-    ]):
-        agents.append("erp")
+# --- AGENT 1: RETRIEVE (single merged search, replaces router + 3 specialists) ---
+def retrieve_agent(state: ARIAState):
+    print("[RETRIEVE AGENT] Searching knowledge store...")
+    docs = knowledge_store.similarity_search(state["question"], k=6)
+    context = "\n\n".join(f"[{doc.metadata.get('source', 'unknown')}] {doc.page_content}" for doc in docs)
+    print(f"[RETRIEVE AGENT] Found {len(docs)} documents")
+    return {"context": context}
 
-    if any(_contains_keyword(question, word) for word in [
-        "shipment", "warehouse", "quality hold", "overdue", "customs",
-        "inbound", "wms", "shipping", "carrier", "dispatch"
-    ]):
-        agents.append("wms")
-
-    if not agents:
-        agents = ["supplier", "erp", "wms"]
-
-    print(f"[ROUTER] Dispatching to: {agents}")
-    return {"agents_to_call": agents}
-
-# --- AGENT 2: SUPPLIER SPECIALIST ---
-def supplier_agent(state: ARIAState):
-    if "supplier" not in state["agents_to_call"]:
-        print("[SUPPLIER AGENT] Skipped")
-        return {"supplier_context": ""}
-    print("[SUPPLIER AGENT] Searching supplier documents...")
-    retriever = supplier_store.as_retriever(search_kwargs={"k": 3})
-    docs = retriever.invoke(state["question"])
-    context = "\n\n".join(doc.page_content for doc in docs)
-    print(f"[SUPPLIER AGENT] Found {len(docs)} documents")
-    return {"supplier_context": context}
-
-# --- AGENT 3: ERP SPECIALIST ---
-def erp_agent(state: ARIAState):
-    if "erp" not in state["agents_to_call"]:
-        print("[ERP AGENT] Skipped")
-        return {"erp_context": ""}
-    print("[ERP AGENT] Searching ERP data...")
-    retriever = erp_store.as_retriever(search_kwargs={"k": 3})
-    docs = retriever.invoke(state["question"])
-    context = "\n\n".join(doc.page_content for doc in docs)
-    print(f"[ERP AGENT] Found {len(docs)} documents")
-    return {"erp_context": context}
-
-# --- AGENT 4: WMS SPECIALIST ---
-def wms_agent(state: ARIAState):
-    if "wms" not in state["agents_to_call"]:
-        print("[WMS AGENT] Skipped")
-        return {"wms_context": ""}
-    print("[WMS AGENT] Searching WMS data...")
-    retriever = wms_store.as_retriever(search_kwargs={"k": 3})
-    docs = retriever.invoke(state["question"])
-    context = "\n\n".join(doc.page_content for doc in docs)
-    print(f"[WMS AGENT] Found {len(docs)} documents")
-    return {"wms_context": context}
-
-# --- AGENT 5: SYNTHESIS WITH HALLUCINATION GUARDRAILS ---
+# --- AGENT 2: SYNTHESIS WITH HALLUCINATION GUARDRAILS ---
 def synthesis_agent(state: ARIAState):
-    print("[SYNTHESIS AGENT] Combining specialist outputs...")
-    combined_context = ""
-    if state.get("supplier_context"):
-        combined_context += f"SUPPLIER DATA:\n{state['supplier_context']}\n\n"
-    if state.get("erp_context"):
-        combined_context += f"ERP DATA:\n{state['erp_context']}\n\n"
-    if state.get("wms_context"):
-        combined_context += f"WMS DATA:\n{state['wms_context']}\n\n"
+    print("[SYNTHESIS AGENT] Generating answer...")
+    combined_context = state.get("context", "")
 
     # --- GUARDRAIL 1: No context retrieved ---
     if not combined_context.strip():
         print("[GUARDRAIL] No context retrieved — refusing to answer")
-        return {"final_answer": "I was unable to find relevant information in the supplier, ERP, or WMS data to answer this question. Please rephrase your query or check if the data source contains this information."}
+        return {"final_answer": "I was unable to find relevant information in the available data to answer this question. Please rephrase your query or check if the data source contains this information."}
 
     # --- GUARDRAIL 2: Context too short to be meaningful ---
     if len(combined_context.strip()) < 100:
         print("[GUARDRAIL] Context too sparse — refusing to answer")
         return {"final_answer": "I found very limited information related to your question. I cannot provide a reliable answer without sufficient data. Please try a more specific query."}
 
+    history = state.get("history") or []
+    history_block = ""
+    if history:
+        turns = "\n".join(f"Q: {h['question']}\nA: {h['answer']}" for h in history)
+        history_block = f"\nConversation so far (most recent last):\n{turns}\n"
+
     prompt = f"""You are ARIA, an Agentic Risk and Intelligence Assistant for supply chain management.
-You have received intelligence from specialist agents covering supplier profiles, ERP systems, and WMS warehouse data.
+You have access to a knowledge base covering supplier profiles, ERP systems, and WMS warehouse data.
 
 IMPORTANT INSTRUCTIONS:
 - Use ONLY the context below to answer the question
@@ -282,8 +244,9 @@ IMPORTANT INSTRUCTIONS:
 - Never make up supplier names, numbers, dates, or facts not present in the context
 - Always mention which data source supports your answer
 - If you are uncertain, say so explicitly
-
-Context from specialist agents:
+- Use the conversation history only to resolve references (e.g. "that supplier") — never as a source of facts
+{history_block}
+Context:
 {combined_context}
 
 Question: {state['question']}
@@ -317,94 +280,128 @@ Answer:"""
     print("[SYNTHESIS AGENT] Answer generated")
     return {"final_answer": answer}
 
-# --- BUILD THE GRAPH WITH PARALLEL EXECUTION ---
-print("Building ARIA multi-agent graph...")
+# --- BUILD THE GRAPH ---
+print("Building ARIA graph...")
 
 workflow = StateGraph(ARIAState)
-workflow.add_node("router", router_agent)
-workflow.add_node("supplier", supplier_agent)
-workflow.add_node("erp", erp_agent)
-workflow.add_node("wms", wms_agent)
+workflow.add_node("retrieve", retrieve_agent)
 workflow.add_node("synthesis", synthesis_agent)
 
-workflow.set_entry_point("router")
-workflow.add_edge("router", "supplier")
-workflow.add_edge("router", "erp")
-workflow.add_edge("router", "wms")
-workflow.add_edge("supplier", "synthesis")
-workflow.add_edge("erp", "synthesis")
-workflow.add_edge("wms", "synthesis")
+workflow.set_entry_point("retrieve")
+workflow.add_edge("retrieve", "synthesis")
 workflow.add_edge("synthesis", END)
 
 aria_graph = workflow.compile()
-print("ARIA multi-agent graph ready!")
+print("ARIA graph ready!")
 
 # --- CACHED ENTRY POINT ---
-def ask_aria_multi(question: str) -> dict:
+def ask_aria_multi(question: str, session_id: Optional[str] = None) -> dict:
     start = time.time()
+    session_id = session_id or str(uuid.uuid4())
 
     # Check cache first
     cached_answer = cache.get(question)
     if cached_answer:
         elapsed = time.time() - start
+        _append_history(session_id, question, cached_answer)
         return {
             "answer": cached_answer,
             "source": "cache",
+            "session_id": session_id,
             "latency_ms": round(elapsed * 1000, 2)
         }
 
-    # Cache miss — run multi-agent pipeline
-    result = aria_graph.invoke({"question": question})
+    # Cache miss — run the retrieval + synthesis pipeline
+    history = _get_history(session_id)
+    result = aria_graph.invoke({"question": question, "session_id": session_id, "history": history})
     answer = result["final_answer"]
 
-    # Store in cache
+    # Store in cache and conversation memory
     cache.set(question, answer)
+    _append_history(session_id, question, answer)
 
     elapsed = time.time() - start
     return {
         "answer": answer,
         "source": "multi-agent",
+        "session_id": session_id,
         "latency_ms": round(elapsed * 1000, 2)
     }
+
+# --- SELF-LEARNING LOOP ---
+# Feedback is logged inline (cheap — one Redis append, no embedding/LLM call) but
+# promotion into the knowledge store always runs out-of-band so it never adds
+# latency to /ask or /feedback.
+FEEDBACK_KEY = "aria:feedback"
+FEEDBACK_OFFSET_KEY = "aria:feedback:promoted_offset"
+
+def record_feedback(question: str, answer: str, helpful: bool, session_id: Optional[str] = None):
+    try:
+        entry = {
+            "question": question,
+            "answer": answer,
+            "helpful": helpful,
+            "session_id": session_id,
+            "timestamp": time.time(),
+        }
+        redis_client.rpush(FEEDBACK_KEY, json.dumps(entry))
+        print(f"[FEEDBACK] Recorded helpful={helpful} for: '{question}'")
+    except redis.RedisError as e:
+        print(f"[FEEDBACK] Failed to record feedback: {e}")
+
+def promote_learned_knowledge():
+    """Fold confirmed-helpful Q&A pairs back into the knowledge store so future
+    similar questions retrieve richer context. Intended to run as a background
+    task, not inline on a request."""
+    try:
+        offset = int(redis_client.get(FEEDBACK_OFFSET_KEY) or 0)
+        raw_entries = redis_client.lrange(FEEDBACK_KEY, offset, -1)
+    except redis.RedisError as e:
+        print(f"[LEARNING] Could not read feedback log: {e}")
+        return {"promoted": 0}
+
+    new_docs = [
+        Document(
+            page_content=f"Q: {entry['question']}\nA: {entry['answer']}",
+            metadata={"source": "learned"}
+        )
+        for entry in (json.loads(raw) for raw in raw_entries)
+        if entry.get("helpful")
+    ]
+
+    if new_docs:
+        knowledge_store.add_documents(new_docs)
+        print(f"[LEARNING] Promoted {len(new_docs)} learned Q&A pairs into '{KNOWLEDGE_COLLECTION}'")
+    else:
+        print("[LEARNING] No new helpful feedback to promote")
+
+    try:
+        redis_client.set(FEEDBACK_OFFSET_KEY, offset + len(raw_entries))
+    except redis.RedisError as e:
+        print(f"[LEARNING] Failed to advance feedback offset: {e}")
+
+    return {"promoted": len(new_docs)}
+
 # --- REINDEX FUNCTION ---
 def reindex_all():
-    global supplier_store, erp_store, wms_store
-    print("[REINDEX] Starting reindex of all collections...")
+    global knowledge_store
+    print("[REINDEX] Starting reindex of knowledge store...")
 
-    # Release the old stores' DB connections before replacing them —
-    # otherwise repeated reindexing leaks one engine per call.
-    for old_store in (supplier_store, erp_store, wms_store):
-        if hasattr(old_store._bind, "dispose"):
-            old_store._bind.dispose()
+    # Release the old store's DB connection before replacing it — otherwise
+    # repeated reindexing leaks one engine per call.
+    if hasattr(knowledge_store._bind, "dispose"):
+        knowledge_store._bind.dispose()
 
-    supplier_store = PGVector.from_documents(
-        documents=[Document(page_content=t, metadata={"source": "supplier"}) for t in supplier_documents],
+    knowledge_store = PGVector.from_documents(
+        documents=_all_seed_documents(),
         embedding=embeddings,
         connection_string=CONNECTION_STRING,
-        collection_name="aria_supplier",
+        collection_name=KNOWLEDGE_COLLECTION,
         pre_delete_collection=True
     )
-    print("[REINDEX] Supplier collection done")
+    print("[REINDEX] Knowledge store reindexed successfully!")
+    return {"status": "reindexed", "collections": [KNOWLEDGE_COLLECTION]}
 
-    erp_store = PGVector.from_documents(
-        documents=[Document(page_content=t, metadata={"source": "erp"}) for t in erp_data],
-        embedding=embeddings,
-        connection_string=CONNECTION_STRING,
-        collection_name="aria_erp",
-        pre_delete_collection=True
-    )
-    print("[REINDEX] ERP collection done")
-
-    wms_store = PGVector.from_documents(
-        documents=[Document(page_content=t, metadata={"source": "wms"}) for t in wms_data],
-        embedding=embeddings,
-        connection_string=CONNECTION_STRING,
-        collection_name="aria_wms",
-        pre_delete_collection=True
-    )
-    print("[REINDEX] WMS collection done")
-    print("[REINDEX] All collections reindexed successfully!")
-    return {"status": "reindexed", "collections": ["aria_supplier", "aria_erp", "aria_wms"]}
 # --- TEST ---
 if __name__ == "__main__":
     print("\n--- ARIA Multi-Agent + Semantic Cache ---\n")
@@ -414,8 +411,9 @@ if __name__ == "__main__":
         "Are there any overdue purchase orders?",
         "Are there any delayed shipments?",
     ]
+    session = str(uuid.uuid4())
     for q in questions:
         print(f"\nQ: {q}")
-        result = ask_aria_multi(q)
+        result = ask_aria_multi(q, session_id=session)
         print(f"A: {result['answer']}")
         print(f"[Source: {result['source']} | Latency: {result['latency_ms']}ms]")

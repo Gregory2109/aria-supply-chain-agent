@@ -160,6 +160,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
 .trace-line.active{color:var(--green)}
 .trace-line.skip{color:var(--text3);opacity:0.5}
 
+.feedback-row{display:flex;gap:6px;align-items:center;margin-top:2px}
+.feedback-btn{
+  width:22px;height:22px;border-radius:5px;
+  background:var(--bg3);border:1px solid var(--border2);
+  color:var(--text2);font-size:11px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.1s;
+}
+.feedback-btn:hover{background:var(--bg4);border-color:var(--accent)}
+.feedback-btn:disabled{cursor:not-allowed;opacity:0.5}
+.feedback-note{font-size:10px;color:var(--text3);font-family:var(--font)}
+
 .typing-indicator{display:flex;gap:4px;padding:4px 0;align-items:center}
 .typing-indicator span{
   width:4px;height:4px;border-radius:50%;
@@ -293,22 +305,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
       <div class="sidebar-label">Agents</div>
       <div class="nav-item">
         <div class="nav-dot blue"></div>
-        Router
+        Retrieve
       </div>
       <div class="nav-item">
         <div class="nav-dot green"></div>
-        Supplier specialist
-      </div>
-      <div class="nav-item">
-        <div class="nav-dot amber"></div>
-        ERP specialist
-      </div>
-      <div class="nav-item">
-        <div class="nav-dot red"></div>
-        WMS specialist
-      </div>
-      <div class="nav-item">
-        <div class="nav-dot blue"></div>
         Synthesis
       </div>
     </div>
@@ -383,19 +383,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
     <div class="panel-section">
       <div class="panel-title">Agent status</div>
       <div class="agent-status">
-        <div class="agent-row"><span class="agent-name">router</span><span class="agent-badge ready" id="s-router">ready</span></div>
-        <div class="agent-row"><span class="agent-name">supplier</span><span class="agent-badge ready" id="s-supplier">ready</span></div>
-        <div class="agent-row"><span class="agent-name">erp</span><span class="agent-badge ready" id="s-erp">ready</span></div>
-        <div class="agent-row"><span class="agent-name">wms</span><span class="agent-badge ready" id="s-wms">ready</span></div>
+        <div class="agent-row"><span class="agent-name">retrieve</span><span class="agent-badge ready" id="s-retrieve">ready</span></div>
         <div class="agent-row"><span class="agent-name">synthesis</span><span class="agent-badge ready" id="s-synthesis">ready</span></div>
       </div>
     </div>
     <div class="panel-section">
       <div class="panel-title">Collections</div>
       <div class="agent-status">
-        <div class="agent-row"><span class="agent-name">aria_supplier</span><span class="agent-badge ready">5 docs</span></div>
-        <div class="agent-row"><span class="agent-name">aria_erp</span><span class="agent-badge ready">5 docs</span></div>
-        <div class="agent-row"><span class="agent-name">aria_wms</span><span class="agent-badge ready">5 docs</span></div>
+        <div class="agent-row"><span class="agent-name">aria_knowledge</span><span class="agent-badge ready">15 docs</span></div>
       </div>
     </div>
   </div>
@@ -406,6 +401,30 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
 let totalQueries = 0;
 let cacheHits = 0;
 let lastLatency = null;
+
+function getSessionId() {
+  let sid = localStorage.getItem('aria_session_id');
+  if (!sid) {
+    sid = (crypto.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + Math.random().toString(16).slice(2)));
+    localStorage.setItem('aria_session_id', sid);
+  }
+  return sid;
+}
+let sessionId = getSessionId();
+
+async function sendFeedback(question, answer, helpful, groupEl) {
+  groupEl.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    await fetch('/feedback', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({question, answer, helpful, session_id: sessionId})
+    });
+    groupEl.innerHTML = '<span class="feedback-note">feedback recorded</span>';
+  } catch (err) {
+    groupEl.querySelectorAll('button').forEach(b => b.disabled = false);
+  }
+}
 
 function updateMetrics(source, latency) {
   totalQueries++;
@@ -419,7 +438,7 @@ function updateMetrics(source, latency) {
 }
 
 function setAgentStatus(agents, status) {
-  ['router','supplier','erp','wms','synthesis'].forEach(a => {
+  ['retrieve','synthesis'].forEach(a => {
     const el = document.getElementById('s-' + a);
     if (!el) return;
     if (agents.includes(a)) {
@@ -433,7 +452,7 @@ function setAgentStatus(agents, status) {
 }
 
 function resetAgentStatus() {
-  ['router','supplier','erp','wms','synthesis'].forEach(a => {
+  ['retrieve','synthesis'].forEach(a => {
     const el = document.getElementById('s-' + a);
     if (el) { el.className = 'agent-badge ready'; el.textContent = 'ready'; }
   });
@@ -477,25 +496,32 @@ async function ask(question) {
       <div class="bubble aria" id="live-bubble-${Date.now()}">
         <div class="typing-indicator"><span></span><span></span><span></span></div>
       </div>
+      <div class="feedback-row" id="live-feedback-${Date.now()}"></div>
     </div>`;
   chat.appendChild(agentRow);
   chat.scrollTop = chat.scrollHeight;
 
   const metaId = agentRow.querySelector('.msg-meta').id;
   const bubbleId = agentRow.querySelector('.bubble').id;
+  const feedbackId = agentRow.querySelector('.feedback-row').id;
 
-  setAgentStatus(['router','supplier','erp','wms','synthesis'], 'active');
+  setAgentStatus(['retrieve','synthesis'], 'active');
 
   try {
     const res = await fetch('/ask', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({question})
+      body: JSON.stringify({question, session_id: sessionId})
     });
     const data = await res.json();
     const src = data.source;
     const lat = data.latency_ms;
     const answer = data.answer;
+
+    if (data.session_id) {
+      sessionId = data.session_id;
+      localStorage.setItem('aria_session_id', sessionId);
+    }
 
     const srcTag = src === 'cache'
       ? `<span class="source-tag cache">⚡ cache</span>`
@@ -503,6 +529,16 @@ async function ask(question) {
 
     document.getElementById(metaId).innerHTML = `${srcTag} <span style="color:var(--text3);font-size:10px;font-family:var(--font)">${lat ? lat.toFixed(0)+'ms' : ''}</span>`;
     document.getElementById(bubbleId).innerHTML = answer.replace(/\n/g,'<br>');
+
+    const feedbackEl = document.getElementById(feedbackId);
+    if (feedbackEl) {
+      feedbackEl.innerHTML = `
+        <button class="feedback-btn" title="Helpful">👍</button>
+        <button class="feedback-btn" title="Not helpful">👎</button>`;
+      const [upBtn, downBtn] = feedbackEl.querySelectorAll('button');
+      upBtn.onclick = () => sendFeedback(question, answer, true, feedbackEl);
+      downBtn.onclick = () => sendFeedback(question, answer, false, feedbackEl);
+    }
 
     updateMetrics(src, lat);
     resetAgentStatus();
