@@ -1,3 +1,13 @@
+---
+title: ARIA Supply Chain Agent
+emoji: 🔗
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # ARIA — Agentic Risk & Intelligence Assistant
 
 > Multi-agent supply chain AI system with LangGraph orchestration, RAG over enterprise data sources, Redis-backed semantic caching, and hallucination guardrails. Built independently prior to joining LuMay AI.
@@ -199,33 +209,73 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ---
 
-## Production Deployment
+## Production Deployment (Free Stack)
 
-Local dev uses Ollama for the LLM since it's free and runs on your own GPU/CPU.
-Most cloud hosts don't have the RAM/CPU budget for that, so production swaps
-to a hosted LLM via `LLM_PROVIDER=groq` (no code change — Ollama and Groq are
-both wired up behind the same `llm_chain` in `aria_graph.py`).
+Runs entirely on free tiers — no credit card required.
 
-### Deploy to Render
+| Service | Role | Why |
+|---|---|---|
+| Hugging Face Spaces | Web service (Docker) | Free CPU with 16GB RAM — handles sentence-transformers + torch comfortably |
+| Supabase | Postgres + pgvector | Free tier, pgvector extension built-in |
+| Upstash | Redis | Free tier (10k commands/day) |
+| Groq | LLM | Free tier, hosts Llama 3.1 |
 
-1. **Get a Groq API key** — [console.groq.com](https://console.groq.com), free tier available.
-2. **Push this repo to GitHub** (already done if you're reading this from the repo).
-3. **New Blueprint** on Render, pointing at this repo — it reads `render.yaml` and provisions the web service + a managed Postgres instance.
-4. **Enable pgvector** — once Postgres is up, connect (Render dashboard → Connect) and run:
+### Step 1 — Supabase (Postgres + pgvector)
+
+1. Sign up at [supabase.com](https://supabase.com) → New Project
+2. Once created, go to **Settings → Database** → copy the **Connection string** (URI format)
+3. Change `postgresql://` to `postgresql+psycopg2://` in the connection string — that's your `DATABASE_URL`
+4. In the Supabase dashboard → **SQL Editor**, run:
    ```sql
    CREATE EXTENSION IF NOT EXISTS vector;
    ```
-5. **Add Redis** — Render dashboard → New → Key Value (or Redis, depending on what's offered at the time). Copy its connection string into the web service's `REDIS_URL` env var.
-6. **Set secrets** on the web service: `GROQ_API_KEY`, `ARIA_API_KEY` (pick any strong random string — this is what protects `/reindex` and `/cache/clear`).
-7. Deploy. Your public URL is whatever Render assigns (e.g. `https://aria-supply-chain-agent.onrender.com`) — the UI is at `/ui`.
 
-Calling a protected endpoint from outside:
+### Step 2 — Upstash (Redis)
+
+1. Sign up at [upstash.com](https://upstash.com) → Create Database → choose Redis
+2. Pick a region, create it
+3. Copy the **Redis URL** (starts with `rediss://`) — that's your `REDIS_URL`
+
+### Step 3 — Groq (LLM)
+
+1. Sign up at [console.groq.com](https://console.groq.com) → API Keys → Create
+2. Copy the key — that's your `GROQ_API_KEY`
+
+### Step 4 — Hugging Face Spaces
+
+1. Sign up at [huggingface.co](https://huggingface.co) → New Space
+2. Name it `aria-supply-chain-agent`, set SDK to **Docker**, visibility to **Public**
+3. Under **Files**, link it to this GitHub repo (or push directly)
+4. Go to **Settings → Variables and Secrets** and add:
+
+| Key | Value |
+|---|---|
+| `DATABASE_URL` | your Supabase connection string |
+| `REDIS_URL` | your Upstash Redis URL |
+| `LLM_PROVIDER` | `groq` |
+| `GROQ_API_KEY` | your Groq key |
+| `GROQ_MODEL` | `llama-3.1-8b-instant` |
+| `ARIA_API_KEY` | any strong random string |
+| `HF_HUB_DISABLE_TELEMETRY` | `1` |
+| `TOKENIZERS_PARALLELISM` | `false` |
+
+5. Click **Factory reboot** (or it'll deploy automatically). First build takes ~5-10 min (pip install + model bake). After that your app is live at:
+   ```
+   https://huggingface.co/spaces/<your-username>/aria-supply-chain-agent
+   ```
+   The UI is at that URL directly (HF Spaces proxies the root).
+
+**Note:** HF Spaces sleeps after ~30 min of inactivity. First request after sleep takes ~20-30s to wake up. This is normal for the free tier.
+
+Calling a protected endpoint:
 ```bash
-curl -X POST https://<your-app>.onrender.com/reindex \
+curl -X POST https://<your-username>-aria-supply-chain-agent.hf.space/reindex \
   -H "X-API-Key: <your ARIA_API_KEY>"
 ```
 
-**Sizing note:** the embedding model (sentence-transformers + torch, CPU) alone used ~500-600MB RAM in local testing, separate from whatever LLM you use. `render.yaml` defaults to Render's `standard` plan for the web service — the cheapest tier will likely OOM on startup.
+### Paid alternative (Render)
+
+If you need no sleep/cold starts, `render.yaml` in this repo provisions everything on Render with a credit card. See [render.com](https://render.com).
 
 ---
 
@@ -240,7 +290,8 @@ curl -X POST https://<your-app>.onrender.com/reindex \
 | Feedback-driven self-learning loop | ✅ Complete |
 | /reindex endpoint for live data | ✅ Complete |
 | Swappable hosted LLM backend (Groq) + API-key auth | ✅ Complete |
-| Render deployment blueprint | ✅ Complete |
+| Free production deployment (HF Spaces + Supabase + Upstash + Groq) | ✅ Complete |
+| Render deployment blueprint (paid, no cold starts) | ✅ Complete |
 | SAP OData live connector | 🔄 In progress |
 | n8n webhook automation | 🔄 Planned |
 | HDBSCAN supplier clustering | 🔄 Planned |
