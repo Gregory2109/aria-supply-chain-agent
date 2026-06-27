@@ -223,12 +223,16 @@ Runs entirely on free tiers — no credit card required.
 ### Step 1 — Supabase (Postgres + pgvector)
 
 1. Sign up at [supabase.com](https://supabase.com) → New Project
-2. Once created, go to **Settings → Database** → copy the **Connection string** (URI format)
-3. Change `postgresql://` to `postgresql+psycopg2://` in the connection string — that's your `DATABASE_URL`
-4. In the Supabase dashboard → **SQL Editor**, run:
+2. In **SQL Editor**, run:
    ```sql
    CREATE EXTENSION IF NOT EXISTS vector;
    ```
+3. Go to **Settings → Database → Connection string** — select the **Session pooler** tab (not Direct connection — that URL is IPv6-only and unreachable from HF Spaces)
+4. Copy the pooler URL, change `postgresql://` to `postgresql+psycopg2://`, and URL-encode any special characters in the password (e.g. `!` → `%21`). It will look like:
+   ```
+   postgresql+psycopg2://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
+   ```
+   That's your `DATABASE_URL`.
 
 ### Step 2 — Upstash (Redis)
 
