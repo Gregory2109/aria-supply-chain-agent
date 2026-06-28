@@ -93,7 +93,10 @@ def fetch_purchase_orders(top=100):
     docs = []
     for po in rows:
         status_code  = po.get("PurchasingProcessingStatus", "")
-        status_label = {"01": "Created", "02": "In Process", "03": "Complete", "04": "Closed"}.get(status_code, status_code or "Open")
+        status_label = {
+            "01": "Created", "02": "In Process", "03": "Released",
+            "04": "Completed", "05": "Fully Released", "06": "Closed"
+        }.get(status_code, status_code or "Open")
         supplier_name = po.get("AddressName") or po.get("Supplier", "N/A")
         docs.append(
             f"ERP MODULE: Purchase Orders\n"

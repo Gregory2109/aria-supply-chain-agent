@@ -309,15 +309,13 @@ Answer:"""
 
     # --- GUARDRAIL 3: Detect if LLM admitted it doesn't know ---
     uncertainty_phrases = [
-        "i don't have",
-        "i do not have",
+        "i don't have sufficient",
+        "i do not have sufficient",
         "not enough information",
         "cannot answer",
-        "no information",
-        "not mentioned",
-        "not provided",
+        "no information available",
         "i cannot determine",
-        "insufficient"
+        "insufficient information",
     ]
 
     answer_lower = answer.lower()
