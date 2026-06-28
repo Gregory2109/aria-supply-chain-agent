@@ -54,7 +54,10 @@ KNOWLEDGE_COLLECTION = "aria_knowledge"
 def _all_seed_documents():
     # Use live SAP data when credentials are present; fall back per-source to
     # mock data so local dev (no SAP creds) keeps working without any changes.
-    sap_configured = bool(os.getenv("SAP_BASE_URL") and os.getenv("SAP_USERNAME") and os.getenv("SAP_PASSWORD"))
+    sap_configured = bool(
+        os.getenv("SAP_API_HUB_KEY")
+        or (os.getenv("SAP_BASE_URL") and os.getenv("SAP_USERNAME") and os.getenv("SAP_PASSWORD"))
+    )
 
     if sap_configured:
         from data.sap_connector import fetch_all_sap_data
