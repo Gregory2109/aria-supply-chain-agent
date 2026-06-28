@@ -10,9 +10,9 @@ from langchain_community.vectorstores import PGVector
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
-from data.supplier_docs import supplier_documents
-from data.erp_data import erp_data
-from data.wms_data import wms_data
+from data.supplier_docs import supplier_documents as _mock_supplier_docs
+from data.erp_data import erp_data as _mock_erp_data
+from data.wms_data import wms_data as _mock_wms_data
 
 # --- SHARED SETUP ---
 print("Loading embedding model...")
@@ -52,10 +52,29 @@ print("Setting up knowledge store...")
 KNOWLEDGE_COLLECTION = "aria_knowledge"
 
 def _all_seed_documents():
+    # Use live SAP data when credentials are present; fall back per-source to
+    # mock data so local dev (no SAP creds) keeps working without any changes.
+    sap_configured = bool(os.getenv("SAP_BASE_URL") and os.getenv("SAP_USERNAME") and os.getenv("SAP_PASSWORD"))
+
+    if sap_configured:
+        from data.sap_connector import fetch_all_sap_data
+        live = fetch_all_sap_data()
+        supplier_texts = live["suppliers"]       or _mock_supplier_docs
+        erp_texts      = live["purchase_orders"] + live["material_stock"] or _mock_erp_data
+        wms_texts      = _mock_wms_data  # no live WMS API yet — keep mock
+        source_label = "live SAP"
+    else:
+        supplier_texts = _mock_supplier_docs
+        erp_texts      = _mock_erp_data
+        wms_texts      = _mock_wms_data
+        source_label = "mock"
+
+    print(f"[SEED] Using {source_label} data: {len(supplier_texts)} supplier, {len(erp_texts)} ERP, {len(wms_texts)} WMS docs")
+
     return (
-        [Document(page_content=t, metadata={"source": "supplier"}) for t in supplier_documents]
-        + [Document(page_content=t, metadata={"source": "erp"}) for t in erp_data]
-        + [Document(page_content=t, metadata={"source": "wms"}) for t in wms_data]
+        [Document(page_content=t, metadata={"source": "supplier"}) for t in supplier_texts]
+        + [Document(page_content=t, metadata={"source": "erp"})      for t in erp_texts]
+        + [Document(page_content=t, metadata={"source": "wms"})      for t in wms_texts]
     )
 
 def _load_or_build_store():

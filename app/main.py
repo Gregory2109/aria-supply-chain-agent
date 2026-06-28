@@ -64,6 +64,17 @@ async def clear_cache():
 async def health():
     return {"status": "ARIA is running"}
 
+@app.get("/sap/test", dependencies=[Depends(require_api_key)])
+async def sap_test():
+    """Probe all three SAP OData APIs and report per-service status."""
+    sap_url = os.getenv("SAP_BASE_URL")
+    if not sap_url:
+        return {"configured": False, "message": "SAP_BASE_URL not set"}
+    from data.sap_connector import test_connection
+    results = await run_in_threadpool(test_connection)
+    all_ok = all(v["ok"] for v in results.values())
+    return {"configured": True, "all_ok": all_ok, "services": results}
+
 @app.get("/ui")
 async def ui():
     return FileResponse(STATIC_DIR / "ui.html")
