@@ -82,9 +82,9 @@ def fetch_purchase_orders(top=100):
         params={
             "$top": top,
             "$select": (
-                "PurchaseOrder,Supplier,PurchaseOrderType,"
-                "DocumentCurrency,NetPaymentDays,TotalNetAmount,"
-                "CreationDate,PurchasingOrganization,PurchaseOrderStatus"
+                "PurchaseOrder,Supplier,AddressName,PurchaseOrderType,"
+                "DocumentCurrency,NetPaymentDays,PaymentTerms,"
+                "CreationDate,PurchasingOrganization,PurchasingProcessingStatus"
             ),
             "$format": "json",
         },
@@ -92,15 +92,17 @@ def fetch_purchase_orders(top=100):
 
     docs = []
     for po in rows:
-        status_code  = po.get("PurchaseOrderStatus", "")
-        status_label = {"": "Draft", "B": "In Process", "N": "Complete"}.get(status_code, status_code)
+        status_code  = po.get("PurchasingProcessingStatus", "")
+        status_label = {"01": "Created", "02": "In Process", "03": "Complete", "04": "Closed"}.get(status_code, status_code or "Open")
+        supplier_name = po.get("AddressName") or po.get("Supplier", "N/A")
         docs.append(
             f"ERP MODULE: Purchase Orders\n"
             f"PO Number: {po.get('PurchaseOrder', 'N/A')}\n"
+            f"Supplier: {supplier_name}\n"
             f"Supplier ID: {po.get('Supplier', 'N/A')}\n"
             f"Type: {po.get('PurchaseOrderType', 'N/A')}\n"
-            f"Total Amount: {po.get('TotalNetAmount', 'N/A')} {po.get('DocumentCurrency', '')}\n"
-            f"Payment Terms: Net {po.get('NetPaymentDays', 'N/A')} days\n"
+            f"Currency: {po.get('DocumentCurrency', 'N/A')}\n"
+            f"Payment Terms: {po.get('PaymentTerms', 'N/A')} (Net {po.get('NetPaymentDays', 'N/A')} days)\n"
             f"Created: {_parse_sap_date(po.get('CreationDate', ''))}\n"
             f"Purchasing Org: {po.get('PurchasingOrganization', 'N/A')}\n"
             f"ERP Status: {status_label}"
@@ -148,21 +150,22 @@ def fetch_material_stock(top=100):
 # ---------------------------------------------------------------------------
 
 def fetch_suppliers(top=100):
+    # Filter to BPs that have a Supplier number — those are the vendor records.
+    # Fallback to no filter if the Hub sandbox returns nothing (different data setup).
     rows = _get(
         "API_BUSINESS_PARTNER",
         "A_BusinessPartner",
         params={
             "$top": top,
             "$select": (
-                "BusinessPartner,BusinessPartnerFullName,"
-                "BusinessPartnerGrouping,Country,Language"
+                "BusinessPartner,Supplier,BusinessPartnerFullName,"
+                "OrganizationBPName1,BusinessPartnerGrouping,Country,Language"
             ),
-            "$filter": "BusinessPartnerGrouping eq 'KRED'",
+            "$filter": "Supplier ne ''",
             "$format": "json",
         },
     )
 
-    # KRED filter may return nothing in the Hub sandbox — retry without it
     if not rows:
         rows = _get(
             "API_BUSINESS_PARTNER",
@@ -170,8 +173,8 @@ def fetch_suppliers(top=100):
             params={
                 "$top": top,
                 "$select": (
-                    "BusinessPartner,BusinessPartnerFullName,"
-                    "BusinessPartnerGrouping,Country,Language"
+                    "BusinessPartner,Supplier,BusinessPartnerFullName,"
+                    "OrganizationBPName1,BusinessPartnerGrouping,Country,Language"
                 ),
                 "$format": "json",
             },
@@ -179,10 +182,13 @@ def fetch_suppliers(top=100):
 
     docs = []
     for bp in rows:
-        name = bp.get("BusinessPartnerFullName") or bp.get("BusinessPartner", "N/A")
+        name = (bp.get("BusinessPartnerFullName")
+                or bp.get("OrganizationBPName1")
+                or bp.get("BusinessPartner", "N/A"))
         docs.append(
             f"Supplier: {name}\n"
             f"SAP Business Partner ID: {bp.get('BusinessPartner', 'N/A')}\n"
+            f"SAP Supplier Number: {bp.get('Supplier', 'N/A')}\n"
             f"Grouping: {bp.get('BusinessPartnerGrouping', 'N/A')}\n"
             f"Country: {bp.get('Country', 'N/A')}"
         )
