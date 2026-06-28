@@ -153,49 +153,13 @@ def fetch_material_stock(top=100):
 # ---------------------------------------------------------------------------
 
 def fetch_suppliers(top=100):
-    # Filter to BPs that have a Supplier number — those are the vendor records.
-    # Fallback to no filter if the Hub sandbox returns nothing (different data setup).
-    rows = _get(
-        "API_BUSINESS_PARTNER",
-        "A_BusinessPartner",
-        params={
-            "$top": top,
-            "$select": (
-                "BusinessPartner,Supplier,BusinessPartnerFullName,"
-                "OrganizationBPName1,BusinessPartnerGrouping,Country,Language"
-            ),
-            "$filter": "Supplier ne ''",
-            "$format": "json",
-        },
-    )
-
-    if not rows:
-        rows = _get(
-            "API_BUSINESS_PARTNER",
-            "A_BusinessPartner",
-            params={
-                "$top": top,
-                "$select": (
-                    "BusinessPartner,Supplier,BusinessPartnerFullName,"
-                    "OrganizationBPName1,BusinessPartnerGrouping,Country,Language"
-                ),
-                "$format": "json",
-            },
-        )
-
-    docs = []
-    for bp in rows:
-        name = (bp.get("BusinessPartnerFullName")
-                or bp.get("OrganizationBPName1")
-                or bp.get("BusinessPartner", "N/A"))
-        docs.append(
-            f"Supplier: {name}\n"
-            f"SAP Business Partner ID: {bp.get('BusinessPartner', 'N/A')}\n"
-            f"SAP Supplier Number: {bp.get('Supplier', 'N/A')}\n"
-            f"Grouping: {bp.get('BusinessPartnerGrouping', 'N/A')}\n"
-            f"Country: {bp.get('Country', 'N/A')}"
-        )
-    return docs
+    # The Hub sandbox BP endpoint does not support filtering by Supplier field,
+    # so we use the enrichment registry as the authoritative supplier source.
+    # Enrichment is keyed by the real SAP Supplier IDs discovered from live PO data,
+    # giving ARIA rich performance metrics (lead time, OTD, risk level, spend, etc.)
+    # that the BP master data API does not carry.
+    from data.supplier_enrichment import enriched_supplier_docs
+    return enriched_supplier_docs()
 
 
 # ---------------------------------------------------------------------------
