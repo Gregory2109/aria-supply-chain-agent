@@ -55,14 +55,15 @@ Final answer → FastAPI → UI
 
 | Layer | Technology |
 |---|---|
-| LLM | Llama 3.2 via Ollama (local dev, zero API cost) — swaps to Groq (`LLM_PROVIDER=groq`) in production |
+| LLM | Groq (`llama-3.1-8b-instant`) in production; set `LLM_PROVIDER=ollama` to swap to local Ollama for zero-cost local dev |
 | Orchestration | LangChain + LangGraph |
 | Vector DB | pgvector (PostgreSQL extension) |
 | Embeddings | all-MiniLM-L6-v2 (HuggingFace, local) |
 | Semantic Cache | Redis (persistent across restarts) |
 | API | FastAPI + async threadpool, API-key auth on admin endpoints |
 | Deployment | Docker, Render Blueprint |
-| Data Sources | Supplier profiles, SAP ERP (mock), WMS (mock) |
+| Data Sources | SAP OData live (purchase orders, material stock via API Business Hub), supplier enrichment layer (18 suppliers, real SAP IDs), WMS (mock) |
+| SAP Connector | `API_PURCHASEORDER_PROCESS_SRV`, `API_MATERIAL_STOCK_SRV`, `API_BUSINESS_PARTNER` — swappable between API Business Hub sandbox and direct S/4HANA tenant |
 
 ---
 
@@ -91,8 +92,14 @@ Two-node graph, kept intentionally lean:
 - `/cache/stats` endpoint for monitoring hit rate
 - `/cache/clear` endpoint for manual cache invalidation
 
+### Live SAP OData integration
+- Connects to SAP S/4HANA Cloud via `API_PURCHASEORDER_PROCESS_SRV` (purchase orders), `API_MATERIAL_STOCK_SRV` (inventory), and `API_BUSINESS_PARTNER` (supplier master data)
+- Dual auth modes: API Business Hub sandbox (API key) or direct S/4HANA tenant (Communication User / Basic Auth) — switched via env vars, no code changes
+- 18-supplier enrichment layer (`data/supplier_enrichment.py`) keyed to real SAP Supplier IDs, carrying lead times, on-time delivery rates, quality rejection rates, risk levels, and YTD spend — fields the BP master data API does not expose
+- `POST /reindex` rebuilds the knowledge store from live SAP data on demand; `GET /sap/test` probes all three OData services without side effects
+
 ### RAG over enterprise data
-- 15 seed documents indexed in a single merged pgvector collection (`aria_knowledge`) spanning supplier, ERP, and WMS sources
+- 200+ documents indexed in a single merged pgvector collection (`aria_knowledge`) — 100 live purchase orders, 100 material stock records, 18 enriched supplier profiles, and WMS data
 - Semantic similarity search using vector embeddings
 - Source citations included in every answer
 - Grows over time as helpful feedback is promoted back into the collection
@@ -124,7 +131,7 @@ Two-node graph, kept intentionally lean:
 | LLM response latency | 3,000 to 10,000ms |
 | Latency improvement on cache hits | 99.5%+ |
 | Cache similarity threshold | 0.65 cosine similarity |
-| Documents indexed | 15 seed docs in one merged collection (+ learned Q&A pairs over time) |
+| Documents indexed | 200+ (100 live POs, 100 stock records, 18 enriched suppliers, WMS) + learned Q&A pairs over time |
 | Semantic match example | "unreliable vendors" matched "highest delivery risk" at 0.955 similarity |
 
 ---
@@ -138,9 +145,11 @@ aria-supply-chain-agent/
 │   └── aria_graph.py     # LangGraph retrieval + synthesis pipeline, Redis cache,
 │                         # session memory, feedback/self-learning loop
 ├── data/
-│   ├── supplier_docs.py  # Supplier profile data
-│   ├── erp_data.py       # Simulated SAP ERP data
-│   └── wms_data.py       # Simulated WMS warehouse data
+│   ├── sap_connector.py      # Live SAP OData connector (API Business Hub + direct tenant)
+│   ├── supplier_enrichment.py# Performance metrics keyed by real SAP Supplier IDs
+│   ├── supplier_docs.py      # Fallback mock supplier profiles (used when SAP creds absent)
+│   ├── erp_data.py           # Fallback mock ERP data
+│   └── wms_data.py           # WMS warehouse data (mock — no free WMS OData API)
 ├── static/
 │   └── ui.html           # Bloomberg-style dark terminal UI
 ├── Dockerfile            # Container configuration
@@ -166,6 +175,7 @@ aria-supply-chain-agent/
 🔒 = requires an `X-API-Key` header matching `ARIA_API_KEY` once that env var is set (see [Production Deployment](#production-deployment)). Unset locally, so these are open in dev.
 | GET | `/ui` | Bloomberg-style chat interface |
 | GET | `/docs` | FastAPI interactive API documentation |
+| GET | `/sap/test` 🔒 | Probe all three SAP OData services with `$top=1` — returns per-service status without modifying data |
 | GET | `/` | Health check |
 
 ---
@@ -259,7 +269,8 @@ Runs entirely on free tiers — no credit card required.
 | `LLM_PROVIDER` | `groq` |
 | `GROQ_API_KEY` | your Groq key |
 | `GROQ_MODEL` | `llama-3.1-8b-instant` |
-| `ARIA_API_KEY` | any strong random string |
+| `ARIA_API_KEY` | any strong random string — protects `/reindex`, `/cache/clear`, `/sap/test` |
+| `SAP_API_HUB_KEY` | API key from [api.sap.com](https://api.sap.com) (profile → Show API Key) |
 | `HF_HUB_DISABLE_TELEMETRY` | `1` |
 | `TOKENIZERS_PARALLELISM` | `false` |
 
@@ -296,7 +307,8 @@ If you need no sleep/cold starts, `render.yaml` in this repo provisions everythi
 | Swappable hosted LLM backend (Groq) + API-key auth | ✅ Complete |
 | Free production deployment (HF Spaces + Supabase + Upstash + Groq) | ✅ Complete |
 | Render deployment blueprint (paid, no cold starts) | ✅ Complete |
-| SAP OData live connector | 🔄 In progress |
+| SAP OData live connector (API Business Hub + direct tenant) | ✅ Complete |
+| Supplier enrichment layer (18 suppliers, real SAP IDs, full KPIs) | ✅ Complete |
 | n8n webhook automation | 🔄 Planned |
 | HDBSCAN supplier clustering | 🔄 Planned |
 | Azure OpenAI swap for enterprise privacy | 🔄 Planned |
