@@ -72,12 +72,16 @@ def _all_seed_documents():
         wms_texts      = _mock_wms_data
         source_label = "mock"
 
-    print(f"[SEED] Using {source_label} data: {len(supplier_texts)} supplier, {len(erp_texts)} ERP, {len(wms_texts)} WMS docs")
+    from data.supplier_clustering import cluster_documents
+    cluster_texts = cluster_documents()
+
+    print(f"[SEED] Using {source_label} data: {len(supplier_texts)} supplier, {len(erp_texts)} ERP, {len(wms_texts)} WMS, {len(cluster_texts)} cluster docs")
 
     return (
         [Document(page_content=t, metadata={"source": "supplier"}) for t in supplier_texts]
         + [Document(page_content=t, metadata={"source": "erp"})      for t in erp_texts]
         + [Document(page_content=t, metadata={"source": "wms"})      for t in wms_texts]
+        + [Document(page_content=t, metadata={"source": "cluster"})  for t in cluster_texts]
     )
 
 def _load_or_build_store():

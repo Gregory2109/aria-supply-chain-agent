@@ -64,6 +64,13 @@ async def clear_cache():
 async def health():
     return {"status": "ARIA is running"}
 
+@app.get("/clusters")
+async def clusters():
+    """Return HDBSCAN supplier clustering results. Public — no auth required."""
+    from data.supplier_clustering import run_clustering
+    result = await run_in_threadpool(run_clustering)
+    return result
+
 @app.get("/sap/test", dependencies=[Depends(require_api_key)])
 async def sap_test():
     """Probe all three SAP OData APIs and report per-service status."""

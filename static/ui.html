@@ -216,6 +216,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
 .ds-badge{font-size:9px;font-family:var(--font);padding:1px 6px;border-radius:3px}
 .ds-badge.live{background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.2)}
 .ds-badge.mock{background:var(--bg4);color:var(--text3);border:1px solid var(--border2)}
+
+.cluster-row{
+  display:flex;align-items:center;gap:7px;
+  padding:5px 0;border-bottom:1px solid var(--border);
+}
+.cluster-row:last-child{border-bottom:none}
+.cluster-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.cluster-dot.green{background:var(--green)}
+.cluster-dot.amber{background:var(--amber)}
+.cluster-dot.red{background:var(--red)}
+.cluster-dot.grey{background:var(--text3)}
+.cluster-info{flex:1;min-width:0}
+.cluster-label{font-size:11px;color:var(--text2);font-family:var(--font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cluster-count{font-size:10px;color:var(--text3);font-family:var(--font)}
 </style>
 </head>
 <body>
@@ -267,6 +281,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
 
     <div class="suggestions">
       <div class="chip" onclick="ask('Which suppliers are at high risk and why?')">High risk suppliers</div>
+      <div class="chip" onclick="ask('How are our suppliers grouped by performance and risk?')">Supplier clusters</div>
       <div class="chip" onclick="ask('What are our open purchase orders and their status?')">Open POs</div>
       <div class="chip" onclick="ask('Which materials have the most stock across plants?')">Stock levels</div>
       <div class="chip" onclick="ask('Who are our top suppliers by YTD spend?')">Top spend</div>
@@ -312,6 +327,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
     </div>
 
     <div class="panel-section">
+      <div class="panel-title">Supplier clusters</div>
+      <div id="cluster-panel"><span style="font-size:10px;color:var(--text3);font-family:var(--font)">loading...</span></div>
+    </div>
+
+    <div class="panel-section">
       <div class="panel-title">Data sources</div>
       <div class="data-source-row"><span class="ds-name">Purchase Orders</span><span class="ds-badge live">live</span></div>
       <div class="data-source-row"><span class="ds-name">Material Stock</span><span class="ds-badge live">live</span></div>
@@ -324,6 +344,51 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
 
 <script>
 let totalQueries = 0, cacheHits = 0;
+
+const CLUSTER_COLORS = {
+  "Top Performers":   "green",
+  "Reliable Mid-Tier":"amber",
+  "Moderate Risk":    "amber",
+  "High Risk":        "red",
+  "Outliers":         "grey",
+};
+
+async function loadClusters() {
+  const panel = document.getElementById('cluster-panel');
+  try {
+    const res  = await fetch('/clusters');
+    const data = await res.json();
+    const rows = [];
+    for (const c of data.clusters) {
+      const color = CLUSTER_COLORS[c.label] || 'grey';
+      rows.push(
+        `<div class="cluster-row">
+          <div class="cluster-dot ${color}"></div>
+          <div class="cluster-info">
+            <div class="cluster-label">${c.label}</div>
+            <div class="cluster-count">${c.size} suppliers · ${c.avg_otd_pct}% OTD</div>
+          </div>
+        </div>`
+      );
+    }
+    if (data.noise_suppliers && data.noise_suppliers.length) {
+      rows.push(
+        `<div class="cluster-row">
+          <div class="cluster-dot grey"></div>
+          <div class="cluster-info">
+            <div class="cluster-label">Outliers</div>
+            <div class="cluster-count">${data.noise_suppliers.length} supplier${data.noise_suppliers.length > 1 ? 's' : ''}</div>
+          </div>
+        </div>`
+      );
+    }
+    panel.innerHTML = rows.join('') || '<span style="font-size:10px;color:var(--text3)">No clusters found</span>';
+  } catch {
+    panel.innerHTML = '<span style="font-size:10px;color:var(--text3)">unavailable</span>';
+  }
+}
+
+loadClusters();
 
 function getSessionId() {
   let sid = localStorage.getItem('aria_session_id');
