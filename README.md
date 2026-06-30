@@ -310,7 +310,7 @@ If you need no sleep/cold starts, `render.yaml` in this repo provisions everythi
 | SAP OData live connector (API Business Hub + direct tenant) | ✅ Complete |
 | Supplier enrichment layer (18 suppliers, real SAP IDs, full KPIs) | ✅ Complete |
 | n8n webhook automation | 🔄 Planned |
-| HDBSCAN supplier clustering | 🔄 Planned |
+| HDBSCAN supplier clustering (auto-segmentation, cluster docs in RAG, /clusters endpoint) | ✅ Complete |
 | Azure OpenAI swap for enterprise privacy | 🔄 Planned |
 
 ---
