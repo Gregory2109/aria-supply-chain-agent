@@ -294,6 +294,33 @@ If you need no sleep/cold starts, `render.yaml` in this repo provisions everythi
 
 ---
 
+## n8n Automation
+
+ARIA's knowledge store is kept fresh via an n8n workflow running on [n8n cloud](https://n8n.io) (free tier).
+
+### What it does
+
+| Trigger | Behaviour |
+|---|---|
+| **Daily schedule** (midnight UTC) | Automatically calls `POST /reindex` — pulls fresh SAP OData data and rebuilds the pgvector knowledge store |
+| **Webhook** (on-demand) | `POST https://gregory2109.app.n8n.cloud/webhook/aria-reindex` — triggers an immediate reindex without needing to touch the server |
+
+### How to set it up
+
+1. Sign up at [n8n.io](https://n8n.io) → New workflow
+2. Add a **Schedule Trigger** node — set to every 1 day at midnight
+3. Add a **Webhook** node — path `aria-reindex`, method POST
+4. Connect both triggers to a single **HTTP Request** node:
+   - Method: `POST`
+   - URL: `https://<your-hf-username>-aria-supply-chain-agent.hf.space/reindex`
+   - Authentication: Generic Credential Type → Header Auth
+   - Header name: `X-API-Key`, value: your `ARIA_API_KEY`
+5. Save and toggle the workflow **Active**
+
+The production webhook URL (`/webhook/aria-reindex`) then works anytime — the test URL (`/webhook-test/aria-reindex`) only works while the editor is open.
+
+---
+
 ## Production Roadmap
 
 | Feature | Status |
@@ -309,7 +336,7 @@ If you need no sleep/cold starts, `render.yaml` in this repo provisions everythi
 | Render deployment blueprint (paid, no cold starts) | ✅ Complete |
 | SAP OData live connector (API Business Hub + direct tenant) | ✅ Complete |
 | Supplier enrichment layer (18 suppliers, real SAP IDs, full KPIs) | ✅ Complete |
-| n8n webhook automation | 🔄 Planned |
+| n8n webhook automation (daily schedule + on-demand webhook → `/reindex`) | ✅ Complete |
 | HDBSCAN supplier clustering (auto-segmentation, cluster docs in RAG, /clusters endpoint) | ✅ Complete |
 | Azure OpenAI swap for enterprise privacy | 🔄 Planned |
 
