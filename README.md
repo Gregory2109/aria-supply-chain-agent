@@ -346,7 +346,7 @@ The production webhook URL (`/webhook/aria-reindex`) then works anytime — the 
 
 Built by **Gregory Jaison** — MS Technology Management, University of Illinois Urbana-Champaign (Supply Chain concentration).
 
-ARIA was designed to demonstrate the intersection of supply chain domain expertise and production-grade agentic AI engineering. The architecture mirrors enterprise AI platforms like LuMay AI, with connector-agnostic design allowing live SAP, Oracle, or WMS data sources to be swapped in with a single file change.
+ARIA was designed to demonstrate the intersection of supply chain domain expertise and production-grade agentic AI engineering. The connector-agnostic architecture allows live SAP, Oracle, or WMS data sources to be swapped in with a single file change.
 
 - LinkedIn: [linkedin.com/in/gregory-jaison](https://linkedin.com/in/gregory-jaison)
 - Email: gregory.jaison@gmail.com
