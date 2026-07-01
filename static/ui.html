@@ -4,60 +4,80 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ARIA — Agentic Risk & Intelligence Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#0a0a0a;
-  --bg2:#111111;
-  --bg3:#1a1a1a;
-  --bg4:#222222;
-  --border:#2a2a2a;
-  --border2:#333333;
-  --text:#e8e8e8;
-  --text2:#999999;
-  --text3:#555555;
-  --accent:#3b82f6;
-  --accent2:#1d4ed8;
-  --green:#22c55e;
-  --amber:#f59e0b;
-  --red:#ef4444;
-  --font: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --bg:    #0c0c0f;
+  --bg2:   #111115;
+  --bg3:   #18181d;
+  --bg4:   #202027;
+  --bg5:   #28282f;
+  --border:#25252d;
+  --border2:#2e2e38;
+  --text:  #eeeef0;
+  --text2: #8a8a9a;
+  --text3: #48485a;
+  --accent:#5b6eff;
+  --accent2:#4454e0;
+  --accent-glow:rgba(91,110,255,0.15);
+  --green: #22c55e;
+  --amber: #f59e0b;
+  --red:   #ef4444;
+  --purple:#a78bfa;
+  --sans:  'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono:  'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
 }
-body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--sans);height:100vh;
+  display:flex;flex-direction:column;overflow:hidden;
+  font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ── Accent strip ── */
+.accent-strip{
+  height:2px;flex-shrink:0;
+  background:linear-gradient(90deg,var(--accent2),var(--accent),var(--purple));
+}
 
 /* ── Topbar ── */
 .topbar{
   display:flex;align-items:center;justify-content:space-between;
-  padding:0 20px;height:48px;
+  padding:0 18px;height:46px;
   background:var(--bg2);border-bottom:1px solid var(--border);
   flex-shrink:0;
 }
-.topbar-left{display:flex;align-items:center;gap:12px}
-.logo{display:flex;align-items:center;gap:10px}
+.topbar-left{display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
 .logo-mark{
-  width:28px;height:28px;border-radius:7px;
-  background:var(--accent);
+  width:30px;height:30px;border-radius:8px;
+  background:linear-gradient(135deg,var(--accent2),var(--accent));
   display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:700;color:#fff;font-family:var(--font);
+  font-size:11px;font-weight:700;color:#fff;font-family:var(--mono);
   letter-spacing:-0.5px;flex-shrink:0;
+  box-shadow:0 0 16px rgba(91,110,255,0.25);
 }
-.logo-name{font-size:13px;font-weight:600;color:var(--text);letter-spacing:0.02em}
-.logo-sub{font-size:10px;color:var(--text3);font-family:var(--font);margin-top:1px}
-.divider-v{width:1px;height:20px;background:var(--border2)}
-.topbar-right{display:flex;align-items:center;gap:6px}
-.badge{
-  padding:3px 8px;border-radius:4px;
-  font-size:10px;font-family:var(--font);
-  background:var(--bg3);border:1px solid var(--border2);
-  color:var(--text2);letter-spacing:0.02em;
+.logo-name{font-size:13px;font-weight:600;color:var(--text);letter-spacing:0.01em}
+.logo-sub{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:1px;letter-spacing:0.03em}
+.divider-v{width:1px;height:18px;background:var(--border2);flex-shrink:0}
+.topbar-right{display:flex;align-items:center;gap:5px}
+.tbadge{
+  padding:3px 9px;border-radius:5px;
+  font-size:10px;font-family:var(--mono);letter-spacing:0.03em;
+  background:var(--bg3);border:1px solid var(--border2);color:var(--text2);
 }
-.badge.blue{background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.3);color:#60a5fa}
-.badge.green{background:rgba(34,197,94,0.08);border-color:rgba(34,197,94,0.2);color:#4ade80}
+.tbadge.blue{background:rgba(91,110,255,0.08);border-color:rgba(91,110,255,0.25);color:#818cf8}
+.tbadge.green{background:rgba(34,197,94,0.07);border-color:rgba(34,197,94,0.2);color:#4ade80}
 
 /* ── Layout ── */
-.main{flex:1;display:flex;overflow:hidden}
-.chat-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main{flex:1;display:flex;overflow:hidden;min-height:0}
+.chat-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
 /* ── Chat header ── */
 .chat-header{
@@ -67,172 +87,236 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
   display:flex;align-items:center;justify-content:space-between;
   flex-shrink:0;
 }
-.chat-title{font-size:13px;font-weight:500;color:var(--text)}
-.chat-meta{font-size:11px;color:var(--text3);font-family:var(--font);margin-top:1px}
-.model-tag{
-  padding:3px 9px;border-radius:4px;
-  font-size:10px;font-family:var(--font);
-  background:rgba(59,130,246,0.1);
-  border:1px solid rgba(59,130,246,0.25);
-  color:#60a5fa;white-space:nowrap;
+.chat-title{font-size:13px;font-weight:600;color:var(--text);letter-spacing:0.01em}
+.chat-meta{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px}
+.pipeline-tag{
+  padding:3px 10px;border-radius:5px;font-size:10px;font-family:var(--mono);
+  background:rgba(91,110,255,0.08);border:1px solid rgba(91,110,255,0.2);
+  color:#818cf8;letter-spacing:0.02em;
 }
 
 /* ── Messages ── */
-.messages{flex:1;overflow-y:auto;padding:24px 24px 12px;display:flex;flex-direction:column;gap:18px;scroll-behavior:smooth}
-.messages::-webkit-scrollbar{width:4px}
+.messages{
+  flex:1;overflow-y:auto;padding:28px 24px 16px;
+  display:flex;flex-direction:column;gap:20px;
+  scroll-behavior:smooth;min-height:0;
+}
+.messages::-webkit-scrollbar{width:3px}
 .messages::-webkit-scrollbar-track{background:transparent}
 .messages::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
-.msg-row{display:flex;gap:10px;max-width:100%}
+.msg-row{display:flex;gap:11px;animation:fadeUp 0.2s ease-out both}
 .msg-row.user{flex-direction:row-reverse}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
 .avatar{
-  width:28px;height:28px;border-radius:6px;
+  width:30px;height:30px;border-radius:8px;
   display:flex;align-items:center;justify-content:center;
-  font-size:10px;font-weight:700;flex-shrink:0;font-family:var(--font);
+  font-size:10px;font-weight:700;flex-shrink:0;font-family:var(--mono);
+  margin-top:2px;
 }
-.avatar.aria{background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa}
+.avatar.aria{
+  background:linear-gradient(135deg,rgba(91,110,255,0.2),rgba(167,139,250,0.15));
+  border:1px solid rgba(91,110,255,0.3);color:#818cf8;
+}
 .avatar.user{background:var(--bg3);border:1px solid var(--border2);color:var(--text2)}
 
-.msg-content{max-width:80%;display:flex;flex-direction:column;gap:5px}
+.msg-content{max-width:78%;display:flex;flex-direction:column;gap:6px}
+.msg-row.user .msg-content{align-items:flex-end}
+
 .msg-header{display:flex;align-items:center;gap:8px}
-.msg-name{font-size:11px;font-weight:600;color:var(--text2);font-family:var(--font)}
-.msg-meta{font-size:10px;color:var(--text3);font-family:var(--font);display:flex;align-items:center;gap:6px}
+.msg-name{font-size:11px;font-weight:600;color:var(--text2);font-family:var(--mono)}
+.msg-meta{display:flex;align-items:center;gap:6px}
 
 .source-tag{
-  font-size:10px;font-family:var(--font);
-  padding:1px 6px;border-radius:3px;
-  display:inline-flex;align-items:center;gap:4px;
+  font-size:10px;font-family:var(--mono);letter-spacing:0.02em;
+  padding:1px 7px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;
 }
-.source-tag.cache{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);color:#4ade80}
-.source-tag.multi{background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa}
+.source-tag.cache{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);color:#4ade80}
+.source-tag.multi{background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.2);color:#c4b5fd}
+.latency-tag{font-size:10px;color:var(--text3);font-family:var(--mono)}
 
 .bubble{
-  padding:11px 14px;border-radius:8px;
-  font-size:13px;line-height:1.7;
+  padding:12px 15px;border-radius:10px;
+  font-size:13.5px;line-height:1.75;
   border:1px solid var(--border);
 }
-.bubble.aria{background:var(--bg2);border-color:var(--border)}
-.bubble.user{background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.2);color:var(--text)}
+.bubble.aria{
+  background:var(--bg2);border-color:var(--border);
+  border-bottom-left-radius:3px;
+}
+.bubble.user{
+  background:rgba(91,110,255,0.07);
+  border-color:rgba(91,110,255,0.18);
+  border-bottom-right-radius:3px;
+  color:var(--text);
+}
 
-.feedback-row{display:flex;gap:6px;align-items:center;margin-top:1px}
+/* Markdown inside bubbles */
+.bubble h1,.bubble h2,.bubble h3{
+  font-size:13.5px;font-weight:600;color:var(--text);
+  margin-bottom:6px;margin-top:10px;
+}
+.bubble h1:first-child,.bubble h2:first-child,.bubble h3:first-child{margin-top:0}
+.bubble p{margin-bottom:8px}
+.bubble p:last-child{margin-bottom:0}
+.bubble strong{color:var(--text);font-weight:600}
+.bubble ul,.bubble ol{padding-left:18px;margin-bottom:8px}
+.bubble li{margin-bottom:3px}
+.bubble code{
+  font-family:var(--mono);font-size:12px;
+  background:var(--bg4);border:1px solid var(--border2);
+  padding:1px 5px;border-radius:3px;color:#a5f3fc;
+}
+.bubble pre{
+  background:var(--bg4);border:1px solid var(--border2);
+  border-radius:6px;padding:10px 12px;margin:8px 0;overflow-x:auto;
+}
+.bubble pre code{background:none;border:none;padding:0;color:#e2e8f0;font-size:12px}
+.bubble blockquote{
+  border-left:2px solid var(--accent);padding-left:10px;
+  color:var(--text2);margin:6px 0;
+}
+
+.feedback-row{display:flex;gap:5px;align-items:center}
 .feedback-btn{
-  width:22px;height:22px;border-radius:5px;
+  height:22px;padding:0 7px;border-radius:5px;
   background:var(--bg3);border:1px solid var(--border2);
   color:var(--text2);font-size:11px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  transition:all 0.1s;
+  display:flex;align-items:center;gap:3px;
+  transition:all 0.12s;font-family:var(--sans);
 }
-.feedback-btn:hover{background:var(--bg4);border-color:var(--accent)}
-.feedback-btn:disabled{cursor:not-allowed;opacity:0.4}
-.feedback-note{font-size:10px;color:var(--text3);font-family:var(--font)}
+.feedback-btn:hover{background:var(--bg4);border-color:var(--accent);color:var(--text)}
+.feedback-btn:disabled{cursor:not-allowed;opacity:0.35}
+.feedback-note{font-size:10px;color:var(--text3);font-family:var(--mono)}
 
-.typing-indicator{display:flex;gap:4px;padding:4px 0;align-items:center}
-.typing-indicator span{
-  width:4px;height:4px;border-radius:50%;
-  background:var(--text3);animation:bounce 1.2s infinite;
+.typing-dots{display:flex;gap:4px;padding:6px 2px;align-items:center}
+.typing-dots span{
+  width:5px;height:5px;border-radius:50%;
+  background:var(--text3);animation:dotBounce 1.3s ease-in-out infinite;
 }
-.typing-indicator span:nth-child(2){animation-delay:0.2s}
-.typing-indicator span:nth-child(3){animation-delay:0.4s}
-@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
+.typing-dots span:nth-child(2){animation-delay:0.15s}
+.typing-dots span:nth-child(3){animation-delay:0.3s}
+@keyframes dotBounce{0%,60%,100%{transform:translateY(0);opacity:0.4}30%{transform:translateY(-5px);opacity:1}}
 
-/* ── Suggestion chips ── */
+/* ── Suggestions ── */
 .suggestions{
-  display:flex;gap:6px;padding:10px 20px;
-  flex-wrap:wrap;border-top:1px solid var(--border);
+  display:flex;gap:6px;padding:10px 18px;
+  overflow-x:auto;border-top:1px solid var(--border);
   background:var(--bg);flex-shrink:0;
+  scrollbar-width:none;
 }
+.suggestions::-webkit-scrollbar{display:none}
 .chip{
-  padding:5px 11px;border-radius:5px;
-  font-size:11px;font-family:var(--font);
+  padding:5px 12px;border-radius:20px;white-space:nowrap;
+  font-size:11.5px;font-family:var(--sans);font-weight:500;
   background:var(--bg3);border:1px solid var(--border2);
-  color:var(--text2);cursor:pointer;transition:all 0.1s;white-space:nowrap;
+  color:var(--text2);cursor:pointer;transition:all 0.12s;flex-shrink:0;
 }
-.chip:hover{background:var(--bg4);border-color:var(--accent);color:var(--text)}
+.chip:hover{background:var(--bg4);border-color:var(--accent);color:var(--text);box-shadow:0 0 10px var(--accent-glow)}
 
 /* ── Input bar ── */
 .input-bar{
-  padding:12px 20px;
+  padding:12px 18px;
   background:var(--bg2);border-top:1px solid var(--border);
-  display:flex;gap:10px;align-items:center;flex-shrink:0;
+  display:flex;gap:10px;align-items:flex-end;flex-shrink:0;
 }
-.input-prefix{font-size:13px;color:var(--text3);font-family:var(--font);flex-shrink:0}
-.input-wrap{flex:1;position:relative}
+.input-wrap{
+  flex:1;background:var(--bg3);
+  border:1px solid var(--border2);border-radius:10px;
+  display:flex;align-items:flex-end;gap:8px;padding:10px 14px;
+  transition:border-color 0.15s;
+}
+.input-wrap:focus-within{border-color:rgba(91,110,255,0.4);box-shadow:0 0 0 3px rgba(91,110,255,0.06)}
+.input-prefix{font-size:13px;color:var(--text3);font-family:var(--mono);line-height:1.5;flex-shrink:0;padding-bottom:1px}
 #input{
-  width:100%;background:var(--bg3);
-  border:1px solid var(--border2);border-radius:7px;
-  padding:9px 14px;color:var(--text);font-size:13px;
-  font-family:var(--sans);outline:none;transition:border-color 0.15s;
+  flex:1;background:transparent;border:none;outline:none;
+  color:var(--text);font-size:13.5px;font-family:var(--sans);
+  resize:none;min-height:22px;max-height:120px;line-height:1.6;
+  overflow-y:auto;scrollbar-width:none;
 }
-#input:focus{border-color:rgba(59,130,246,0.5)}
 #input::placeholder{color:var(--text3)}
+#input::-webkit-scrollbar{display:none}
 .send-btn{
-  width:34px;height:34px;border-radius:7px;
-  background:var(--accent);border:none;
-  display:flex;align-items:center;justify-content:center;
-  cursor:pointer;transition:all 0.1s;flex-shrink:0;color:#fff;
+  width:36px;height:36px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--accent2),var(--accent));
+  border:none;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all 0.12s;color:#fff;
+  box-shadow:0 2px 8px rgba(91,110,255,0.3);
 }
-.send-btn:hover{background:var(--accent2)}
-.send-btn:disabled{background:var(--bg3);cursor:not-allowed;color:var(--text3)}
-.send-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+.send-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(91,110,255,0.4)}
+.send-btn:disabled{background:var(--bg4);box-shadow:none;transform:none;cursor:not-allowed;color:var(--text3)}
+.send-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2}
 
 /* ── Right panel ── */
 .right-panel{
-  width:210px;flex-shrink:0;
+  width:220px;flex-shrink:0;
   background:var(--bg2);border-left:1px solid var(--border);
-  padding:16px;overflow-y:auto;
+  overflow-y:auto;scrollbar-width:none;
 }
-.panel-section{margin-bottom:22px}
-.panel-title{
-  font-size:10px;font-family:var(--font);color:var(--text3);
-  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;
+.right-panel::-webkit-scrollbar{display:none}
+
+.panel-block{padding:16px;border-bottom:1px solid var(--border)}
+.panel-block:last-child{border-bottom:none}
+.panel-label{
+  font-size:9.5px;font-family:var(--mono);color:var(--text3);
+  text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;
 }
+
+/* Metric grid */
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .metric-card{
   background:var(--bg3);border:1px solid var(--border);
-  border-radius:6px;padding:10px 12px;margin-bottom:8px;
+  border-radius:7px;padding:10px 11px;
 }
-.metric-label{font-size:10px;color:var(--text3);font-family:var(--font);margin-bottom:4px}
-.metric-val{font-size:18px;font-weight:600;color:var(--text);font-family:var(--font)}
-.metric-sub{font-size:10px;color:var(--text3);margin-top:2px}
-.metric-green{color:var(--green)}
-.metric-amber{color:var(--amber)}
+.metric-card.full{grid-column:1/-1}
+.m-label{font-size:9.5px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px}
+.m-val{font-size:20px;font-weight:600;font-family:var(--mono);color:var(--text);line-height:1}
+.m-sub{font-size:10px;color:var(--text3);margin-top:3px;font-family:var(--mono)}
+.m-val.green{color:var(--green)}
+.m-val.amber{color:var(--amber)}
 
-.agent-status{display:flex;flex-direction:column;gap:6px}
+/* Agent pipeline */
+.agent-list{display:flex;flex-direction:column;gap:5px}
 .agent-row{
   display:flex;align-items:center;justify-content:space-between;
-  padding:6px 8px;background:var(--bg3);border-radius:5px;border:1px solid var(--border);
+  padding:7px 9px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);
 }
-.agent-name{font-size:11px;color:var(--text2);font-family:var(--font)}
-.agent-badge{font-size:9px;font-family:var(--font);padding:1px 6px;border-radius:3px}
-.agent-badge.ready{background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.2)}
-.agent-badge.active{background:rgba(59,130,246,0.1);color:#60a5fa;border:1px solid rgba(59,130,246,0.2)}
-.agent-badge.idle{background:var(--bg4);color:var(--text3);border:1px solid var(--border2)}
+.agent-name{font-size:11px;color:var(--text2);font-family:var(--mono)}
+.agent-pill{font-size:9px;font-family:var(--mono);padding:2px 7px;border-radius:10px}
+.agent-pill.ready{background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.2)}
+.agent-pill.active{background:rgba(91,110,255,0.12);color:#818cf8;border:1px solid rgba(91,110,255,0.25)}
 
-.data-source-row{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:5px 0;border-bottom:1px solid var(--border);
-}
-.data-source-row:last-child{border-bottom:none}
-.ds-name{font-size:11px;color:var(--text2);font-family:var(--font)}
-.ds-badge{font-size:9px;font-family:var(--font);padding:1px 6px;border-radius:3px}
-.ds-badge.live{background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.2)}
-.ds-badge.mock{background:var(--bg4);color:var(--text3);border:1px solid var(--border2)}
-
-.cluster-row{
-  display:flex;align-items:center;gap:7px;
-  padding:5px 0;border-bottom:1px solid var(--border);
-}
-.cluster-row:last-child{border-bottom:none}
-.cluster-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.cluster-dot.green{background:var(--green)}
-.cluster-dot.amber{background:var(--amber)}
-.cluster-dot.red{background:var(--red)}
+/* Cluster rows */
+.cluster-list{display:flex;flex-direction:column;gap:7px}
+.cluster-row{display:flex;align-items:center;gap:8px}
+.cluster-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.cluster-dot.green{background:var(--green);box-shadow:0 0 5px rgba(34,197,94,0.4)}
+.cluster-dot.amber{background:var(--amber);box-shadow:0 0 5px rgba(245,158,11,0.3)}
+.cluster-dot.red{background:var(--red);box-shadow:0 0 5px rgba(239,68,68,0.3)}
 .cluster-dot.grey{background:var(--text3)}
 .cluster-info{flex:1;min-width:0}
-.cluster-label{font-size:11px;color:var(--text2);font-family:var(--font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cluster-count{font-size:10px;color:var(--text3);font-family:var(--font)}
+.cluster-name{font-size:11px;color:var(--text2);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cluster-sub{font-size:9.5px;color:var(--text3);font-family:var(--mono);margin-top:1px}
+.cluster-bar-wrap{height:2px;background:var(--bg5);border-radius:1px;margin-top:3px;overflow:hidden}
+.cluster-bar{height:100%;border-radius:1px;transition:width 0.6s ease}
+.cluster-bar.green{background:var(--green)}
+.cluster-bar.amber{background:var(--amber)}
+.cluster-bar.red{background:var(--red)}
+.cluster-bar.grey{background:var(--text3)}
+
+/* Data sources */
+.source-list{display:flex;flex-direction:column;gap:5px}
+.source-row{display:flex;align-items:center;justify-content:space-between;padding:2px 0}
+.source-name{font-size:11px;color:var(--text2);font-family:var(--mono)}
+.source-pill{font-size:9px;font-family:var(--mono);padding:1px 7px;border-radius:10px}
+.source-pill.live{background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.18)}
+.source-pill.mock{background:var(--bg4);color:var(--text3);border:1px solid var(--border2)}
 </style>
 </head>
 <body>
+
+<div class="accent-strip"></div>
 
 <div class="topbar">
   <div class="topbar-left">
@@ -240,28 +324,30 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
       <div class="logo-mark">AR</div>
       <div>
         <div class="logo-name">ARIA</div>
-        <div class="logo-sub">Agentic Risk & Intelligence Assistant</div>
+        <div class="logo-sub">supply chain intelligence</div>
       </div>
     </div>
     <div class="divider-v"></div>
-    <span class="badge green">SAP OData Live</span>
+    <span class="tbadge green">SAP OData · Live</span>
+    <span class="tbadge">HDBSCAN</span>
   </div>
   <div class="topbar-right">
-    <span class="badge">Groq · llama-3.1-8b</span>
-    <span class="badge">pgvector</span>
-    <span class="badge blue">LangGraph</span>
+    <span class="tbadge">Groq · llama-3.1-8b</span>
+    <span class="tbadge">pgvector</span>
+    <span class="tbadge blue">LangGraph</span>
   </div>
 </div>
 
 <div class="main">
 
+  <!-- Chat -->
   <div class="chat-area">
     <div class="chat-header">
       <div>
         <div class="chat-title">Procurement Intelligence</div>
         <div class="chat-meta">multi-agent · semantic cache · session memory</div>
       </div>
-      <span class="model-tag">RAG · LangGraph pipeline</span>
+      <span class="pipeline-tag">RAG · LangGraph</span>
     </div>
 
     <div class="messages" id="chat">
@@ -270,28 +356,28 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
         <div class="msg-content">
           <div class="msg-header">
             <span class="msg-name">ARIA</span>
-            <span class="msg-meta">system</span>
+            <span class="msg-meta"><span class="latency-tag">system</span></span>
           </div>
           <div class="bubble aria">
-            Agentic Risk & Intelligence Assistant online. Connected to live SAP OData — 18 supplier profiles, 100 purchase orders, and material stock data across multiple plants. Ask me about supplier risk, spend analysis, inventory levels, purchase order status, or procurement insights.
+            Connected to live SAP OData — <strong>18 suppliers</strong>, <strong>100 purchase orders</strong>, and material stock data across multiple plants. Supplier base is automatically segmented into risk clusters via HDBSCAN.<br><br>Ask me about supplier risk, spend analysis, cluster profiles, inventory levels, or purchase order status.
           </div>
         </div>
       </div>
     </div>
 
     <div class="suggestions">
-      <div class="chip" onclick="ask('Which suppliers are at high risk and why?')">High risk suppliers</div>
-      <div class="chip" onclick="ask('How are our suppliers grouped by performance and risk?')">Supplier clusters</div>
-      <div class="chip" onclick="ask('What are our open purchase orders and their status?')">Open POs</div>
-      <div class="chip" onclick="ask('Which materials have the most stock across plants?')">Stock levels</div>
-      <div class="chip" onclick="ask('Who are our top suppliers by YTD spend?')">Top spend</div>
-      <div class="chip" onclick="ask('Which suppliers have quality or delivery issues?')">Quality issues</div>
+      <div class="chip" onclick="ask('Which suppliers are at high risk and why?')">⚠ High risk suppliers</div>
+      <div class="chip" onclick="ask('How are our suppliers grouped by performance and risk?')">◈ Supplier clusters</div>
+      <div class="chip" onclick="ask('What are our open purchase orders and their status?')">📋 Open POs</div>
+      <div class="chip" onclick="ask('Which materials have the most stock across plants?')">📦 Stock levels</div>
+      <div class="chip" onclick="ask('Who are our top suppliers by YTD spend?')">💰 Top spend</div>
+      <div class="chip" onclick="ask('Which suppliers have quality or delivery issues?')">🔍 Quality issues</div>
     </div>
 
     <div class="input-bar">
-      <span class="input-prefix">&gt;_</span>
       <div class="input-wrap">
-        <input type="text" id="input" placeholder="Query the supply chain intelligence layer..." onkeydown="if(event.key==='Enter')sendMessage()" autocomplete="off" />
+        <span class="input-prefix">&gt;_</span>
+        <textarea id="input" rows="1" placeholder="Query the supply chain intelligence layer..." autocomplete="off"></textarea>
       </div>
       <button class="send-btn" id="send-btn" onclick="sendMessage()" aria-label="Send">
         <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
@@ -299,96 +385,79 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh
     </div>
   </div>
 
+  <!-- Right panel -->
   <div class="right-panel">
-    <div class="panel-section">
-      <div class="panel-title">Session metrics</div>
-      <div class="metric-card">
-        <div class="metric-label">queries</div>
-        <div class="metric-val" id="m-total">0</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">cache hits</div>
-        <div class="metric-val metric-green" id="m-hits">0</div>
-        <div class="metric-sub" id="m-rate">0% hit rate</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">last latency</div>
-        <div class="metric-val metric-amber" id="m-latency">—</div>
-        <div class="metric-sub">milliseconds</div>
+
+    <div class="panel-block">
+      <div class="panel-label">Session</div>
+      <div class="metric-grid">
+        <div class="metric-card">
+          <div class="m-label">queries</div>
+          <div class="m-val" id="m-total">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="m-label">cache</div>
+          <div class="m-val green" id="m-hits">0</div>
+          <div class="m-sub" id="m-rate">0% hit</div>
+        </div>
+        <div class="metric-card full">
+          <div class="m-label">last latency</div>
+          <div class="m-val amber" id="m-latency">—</div>
+          <div class="m-sub">ms</div>
+        </div>
       </div>
     </div>
 
-    <div class="panel-section">
-      <div class="panel-title">Agent pipeline</div>
-      <div class="agent-status">
-        <div class="agent-row"><span class="agent-name">retrieve</span><span class="agent-badge ready" id="s-retrieve">ready</span></div>
-        <div class="agent-row"><span class="agent-name">synthesis</span><span class="agent-badge ready" id="s-synthesis">ready</span></div>
+    <div class="panel-block">
+      <div class="panel-label">Pipeline</div>
+      <div class="agent-list">
+        <div class="agent-row">
+          <span class="agent-name">retrieve</span>
+          <span class="agent-pill ready" id="s-retrieve">ready</span>
+        </div>
+        <div class="agent-row">
+          <span class="agent-name">synthesis</span>
+          <span class="agent-pill ready" id="s-synthesis">ready</span>
+        </div>
       </div>
     </div>
 
-    <div class="panel-section">
-      <div class="panel-title">Supplier clusters</div>
-      <div id="cluster-panel"><span style="font-size:10px;color:var(--text3);font-family:var(--font)">loading...</span></div>
+    <div class="panel-block">
+      <div class="panel-label">Supplier clusters</div>
+      <div class="cluster-list" id="cluster-panel">
+        <span style="font-size:10px;color:var(--text3);font-family:var(--mono)">loading...</span>
+      </div>
     </div>
 
-    <div class="panel-section">
-      <div class="panel-title">Data sources</div>
-      <div class="data-source-row"><span class="ds-name">Purchase Orders</span><span class="ds-badge live">live</span></div>
-      <div class="data-source-row"><span class="ds-name">Material Stock</span><span class="ds-badge live">live</span></div>
-      <div class="data-source-row"><span class="ds-name">Suppliers</span><span class="ds-badge live">live</span></div>
-      <div class="data-source-row"><span class="ds-name">WMS</span><span class="ds-badge mock">mock</span></div>
+    <div class="panel-block">
+      <div class="panel-label">Data sources</div>
+      <div class="source-list">
+        <div class="source-row"><span class="source-name">Purchase Orders</span><span class="source-pill live">live</span></div>
+        <div class="source-row"><span class="source-name">Material Stock</span><span class="source-pill live">live</span></div>
+        <div class="source-row"><span class="source-name">Suppliers</span><span class="source-pill live">live</span></div>
+        <div class="source-row"><span class="source-name">WMS</span><span class="source-pill mock">mock</span></div>
+      </div>
     </div>
+
   </div>
-
 </div>
 
 <script>
-let totalQueries = 0, cacheHits = 0;
-
-const CLUSTER_COLORS = {
-  "Top Performers":   "green",
-  "Reliable Mid-Tier":"amber",
-  "Moderate Risk":    "amber",
-  "High Risk":        "red",
-  "Outliers":         "grey",
-};
-
-async function loadClusters() {
-  const panel = document.getElementById('cluster-panel');
-  try {
-    const res  = await fetch('/clusters');
-    const data = await res.json();
-    const rows = [];
-    for (const c of data.clusters) {
-      const color = CLUSTER_COLORS[c.label] || 'grey';
-      rows.push(
-        `<div class="cluster-row">
-          <div class="cluster-dot ${color}"></div>
-          <div class="cluster-info">
-            <div class="cluster-label">${c.label}</div>
-            <div class="cluster-count">${c.size} suppliers · ${c.avg_otd_pct}% OTD</div>
-          </div>
-        </div>`
-      );
-    }
-    if (data.noise_suppliers && data.noise_suppliers.length) {
-      rows.push(
-        `<div class="cluster-row">
-          <div class="cluster-dot grey"></div>
-          <div class="cluster-info">
-            <div class="cluster-label">Outliers</div>
-            <div class="cluster-count">${data.noise_suppliers.length} supplier${data.noise_suppliers.length > 1 ? 's' : ''}</div>
-          </div>
-        </div>`
-      );
-    }
-    panel.innerHTML = rows.join('') || '<span style="font-size:10px;color:var(--text3)">No clusters found</span>';
-  } catch {
-    panel.innerHTML = '<span style="font-size:10px;color:var(--text3)">unavailable</span>';
-  }
+// ── Marked.js config ──
+if (typeof marked !== 'undefined') {
+  marked.setOptions({ breaks: true, gfm: true });
 }
 
-loadClusters();
+function renderMarkdown(text) {
+  if (typeof marked === 'undefined') {
+    return text.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  }
+  const raw = marked.parse(text);
+  return typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(raw) : raw;
+}
+
+// ── Session ──
+let totalQueries = 0, cacheHits = 0;
 
 function getSessionId() {
   let sid = localStorage.getItem('aria_session_id');
@@ -400,61 +469,106 @@ function getSessionId() {
 }
 let sessionId = getSessionId();
 
-async function sendFeedback(question, answer, helpful, groupEl) {
-  groupEl.querySelectorAll('button').forEach(b => b.disabled = true);
-  try {
-    await fetch('/feedback', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({question, answer, helpful, session_id: sessionId})
-    });
-    groupEl.innerHTML = '<span class="feedback-note">recorded</span>';
-  } catch {
-    groupEl.querySelectorAll('button').forEach(b => b.disabled = false);
-  }
-}
+// ── Auto-expand textarea ──
+const inputEl = document.getElementById('input');
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+});
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
 
+// ── Metrics ──
 function updateMetrics(source, latency) {
   totalQueries++;
   if (source === 'cache') cacheHits++;
   document.getElementById('m-total').textContent = totalQueries;
   document.getElementById('m-hits').textContent = cacheHits;
-  document.getElementById('m-rate').textContent = Math.round((cacheHits / totalQueries) * 100) + '% hit rate';
-  document.getElementById('m-latency').textContent = latency ? latency.toFixed(0) + 'ms' : '—';
+  document.getElementById('m-rate').textContent = Math.round((cacheHits / totalQueries) * 100) + '% hit';
+  document.getElementById('m-latency').textContent = latency ? Math.round(latency) : '—';
 }
 
+// ── Agent status ──
 function setAgentStatus(status) {
   ['retrieve','synthesis'].forEach(a => {
     const el = document.getElementById('s-' + a);
     if (!el) return;
-    el.className = 'agent-badge ' + status;
+    el.className = 'agent-pill ' + (status === 'ready' ? 'ready' : 'active');
     el.textContent = status;
   });
 }
 
-function resetAgentStatus() {
-  ['retrieve','synthesis'].forEach(a => {
-    const el = document.getElementById('s-' + a);
-    if (el) { el.className = 'agent-badge ready'; el.textContent = 'ready'; }
-  });
+// ── Clusters ──
+const CLUSTER_COLORS = {
+  'Top Performers':   'green',
+  'Reliable Mid-Tier':'amber',
+  'Moderate Risk':    'amber',
+  'High Risk':        'red',
+  'Outliers':         'grey',
+};
+
+async function loadClusters() {
+  const panel = document.getElementById('cluster-panel');
+  try {
+    const res = await fetch('/clusters');
+    const data = await res.json();
+    const all = [...data.clusters];
+    if (data.noise_suppliers && data.noise_suppliers.length) {
+      all.push({ label:'Outliers', size: data.noise_suppliers.length, avg_otd_pct: null });
+    }
+    const maxSize = Math.max(...all.map(c => c.size), 1);
+    panel.innerHTML = all.map(c => {
+      const color = CLUSTER_COLORS[c.label] || 'grey';
+      const barPct = Math.round((c.size / maxSize) * 100);
+      const sub = c.avg_otd_pct ? `${c.size} suppliers · ${c.avg_otd_pct}% OTD` : `${c.size} supplier${c.size > 1 ? 's' : ''}`;
+      return `<div class="cluster-row">
+        <div class="cluster-dot ${color}"></div>
+        <div class="cluster-info">
+          <div class="cluster-name">${c.label}</div>
+          <div class="cluster-sub">${sub}</div>
+          <div class="cluster-bar-wrap"><div class="cluster-bar ${color}" style="width:${barPct}%"></div></div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch {
+    panel.innerHTML = '<span style="font-size:10px;color:var(--text3);font-family:var(--mono)">unavailable</span>';
+  }
+}
+loadClusters();
+
+// ── Feedback ──
+async function sendFeedback(question, answer, helpful, groupEl) {
+  groupEl.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    await fetch('/feedback', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({question, answer, helpful, session_id: sessionId})
+    });
+    groupEl.innerHTML = '<span class="feedback-note">recorded ✓</span>';
+  } catch {
+    groupEl.querySelectorAll('button').forEach(b => b.disabled = false);
+  }
 }
 
-async function sendMessage() {
-  const input = document.getElementById('input');
-  const q = input.value.trim();
+// ── Send ──
+function sendMessage() {
+  const q = inputEl.value.trim();
   if (!q) return;
-  input.value = '';
-  await ask(q);
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  ask(q);
 }
 
 async function ask(question) {
   const chat = document.getElementById('chat');
-  const btn = document.getElementById('send-btn');
-  document.getElementById('input').value = '';
+  const btn  = document.getElementById('send-btn');
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
   btn.disabled = true;
-
   const ts = Date.now();
 
+  // User message
   const userRow = document.createElement('div');
   userRow.className = 'msg-row user';
   userRow.innerHTML = `
@@ -466,64 +580,63 @@ async function ask(question) {
       <div class="bubble user">${question.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
     </div>`;
   chat.appendChild(userRow);
+  chat.scrollTop = chat.scrollHeight;
 
-  const agentRow = document.createElement('div');
-  agentRow.className = 'msg-row';
-  agentRow.innerHTML = `
+  // ARIA placeholder
+  const ariaRow = document.createElement('div');
+  ariaRow.className = 'msg-row';
+  ariaRow.innerHTML = `
     <div class="avatar aria">AR</div>
     <div class="msg-content">
       <div class="msg-header">
         <span class="msg-name">ARIA</span>
-        <span class="msg-meta" id="meta-${ts}">processing...</span>
+        <span class="msg-meta" id="meta-${ts}"><span class="latency-tag">processing...</span></span>
       </div>
       <div class="bubble aria" id="bubble-${ts}">
-        <div class="typing-indicator"><span></span><span></span><span></span></div>
+        <div class="typing-dots"><span></span><span></span><span></span></div>
       </div>
       <div class="feedback-row" id="fb-${ts}"></div>
     </div>`;
-  chat.appendChild(agentRow);
+  chat.appendChild(ariaRow);
   chat.scrollTop = chat.scrollHeight;
 
   setAgentStatus('active');
 
   try {
-    const res = await fetch('/ask', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
+    const res  = await fetch('/ask', {
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({question, session_id: sessionId})
     });
     const data = await res.json();
-    const { source, latency_ms: lat, answer, session_id } = data;
+    const { source, latency_ms: lat, answer, session_id: sid } = data;
 
-    if (session_id) { sessionId = session_id; localStorage.setItem('aria_session_id', sessionId); }
+    if (sid) { sessionId = sid; localStorage.setItem('aria_session_id', sessionId); }
 
     const srcTag = source === 'cache'
       ? `<span class="source-tag cache">⚡ cache</span>`
       : `<span class="source-tag multi">◈ multi-agent</span>`;
-
     document.getElementById(`meta-${ts}`).innerHTML =
-      `${srcTag}<span style="color:var(--text3);font-size:10px;font-family:var(--font)">${lat ? lat.toFixed(0)+'ms' : ''}</span>`;
+      `${srcTag}<span class="latency-tag">${lat ? Math.round(lat)+'ms' : ''}</span>`;
 
-    document.getElementById(`bubble-${ts}`).innerHTML =
-      answer.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    document.getElementById(`bubble-${ts}`).innerHTML = renderMarkdown(answer);
 
     const fbEl = document.getElementById(`fb-${ts}`);
     if (fbEl) {
-      fbEl.innerHTML = `<button class="feedback-btn" title="Helpful">👍</button><button class="feedback-btn" title="Not helpful">👎</button>`;
-      const [up, down] = fbEl.querySelectorAll('button');
-      up.onclick   = () => sendFeedback(question, answer, true,  fbEl);
-      down.onclick = () => sendFeedback(question, answer, false, fbEl);
+      fbEl.innerHTML = `
+        <button class="feedback-btn">👍 helpful</button>
+        <button class="feedback-btn">👎 not helpful</button>`;
+      const [up, dn] = fbEl.querySelectorAll('button');
+      up.onclick = () => sendFeedback(question, answer, true,  fbEl);
+      dn.onclick = () => sendFeedback(question, answer, false, fbEl);
     }
 
     updateMetrics(source, lat);
-    resetAgentStatus();
-
   } catch {
     document.getElementById(`bubble-${ts}`).innerHTML =
       '<span style="color:var(--red)">Connection error — server may be starting up. Try again in a moment.</span>';
-    resetAgentStatus();
   }
 
+  setAgentStatus('ready');
   btn.disabled = false;
   chat.scrollTop = chat.scrollHeight;
 }
